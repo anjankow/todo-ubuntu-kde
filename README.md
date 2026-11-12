@@ -2,22 +2,24 @@
 
 A simple todo list for KDE Plasma 5 (Qt 5 Widgets + KDE Frameworks 5).
 Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
-(your home directory by default; change it with *File → Storage folder…*).
+(your home directory by default; change it with the *Storage folder…* button).
 
 ## Using it
 
-- **Add a task** – type into the input below the list and press `Enter`.
+- **Add a task** – type into the input above the list and press `Enter`;
+  the new task appears on top.
   `Shift+Enter` starts the description on the next line.
-- **Task card** – click a task title to see and edit title, description and labels.
-- **Select** – tick the checkbox of one or more tasks, then use the toolbar:
-  *Complete*, *Cancel task*, *Postpone*, *Restore*, *Delete*.
+- **Task card** – click a task title to see and edit title, description and labels,
+  or to complete, postpone or cancel the task.
+- **Select** – tick the checkbox of one or more tasks (`Ctrl+A` selects all), then use the toolbar:
+  *Complete*, *Cancel task*, *Postpone*, *Restore*, *Delete*, *Label*.
   Deleting several tasks at once asks for confirmation; deletion is permanent.
 - **Postpone** – until tomorrow, 3 days, 1 week, 1 month or a custom date and time.
   Postponed tasks return to the list when the app is opened after that time.
 - **Tabs** – *Tasks*, *Postponed*, *Completed*, *Cancelled*.
 - **Reorder** – drag tasks, or `Ctrl+Up` / `Ctrl+Down`.
-- **Labels** – *File → Labels…* to define labels (name + one of 12 colors);
-  assign them in the task card; filter with the label buttons above the list
+- **Labels** – the *Labels…* button defines labels (name + one of 12 colors);
+  assign them in the task card or to the selected tasks with *Label*; filter with the label buttons above the list
   (a task is shown if it has any of the selected labels).
 
 ## Install

@@ -17,6 +17,11 @@ TaskListView::TaskListView(TodoStore *store, TaskState state, QWidget *parent)
     , m_state(state)
 {
     setSelectionMode(QAbstractItemView::SingleSelection);
+    // Tasks are easier to read a little larger and with some air between them.
+    QFont taskFont = font();
+    taskFont.setPointSize(taskFont.pointSize() + 2);
+    setFont(taskFont);
+    setSpacing(4);
     setIconSize(QSize(40, 12));
     if (state == TaskState::Active) {
         setDragDropMode(QAbstractItemView::InternalMove);
@@ -51,9 +56,7 @@ void TaskListView::setLabelFilter(const QSet<QString> &labelIds)
 
 QIcon TaskListView::labelIcon(const Task &task) const
 {
-    if (task.labelIds.isEmpty()) {
-        return {};
-    }
+    // Tasks without labels get an empty icon so that all titles line up.
     const int dot = 10;
     QPixmap pixmap(iconSize());
     pixmap.fill(Qt::transparent);
@@ -147,6 +150,13 @@ void TaskListView::clearChecked()
     }
 }
 
+void TaskListView::checkAll()
+{
+    for (int i = 0; i < count(); ++i) {
+        item(i)->setCheckState(Qt::Checked);
+    }
+}
+
 QRect TaskListView::checkRect(int row) const
 {
     QStyleOptionViewItem option = viewOptions();
@@ -180,6 +190,11 @@ void TaskListView::mousePressEvent(QMouseEvent *event)
 
 void TaskListView::keyPressEvent(QKeyEvent *event)
 {
+    if (event->matches(QKeySequence::SelectAll)) {
+        checkAll();
+        event->accept();
+        return;
+    }
     if (event->modifiers() & Qt::ControlModifier) {
         if (event->key() == Qt::Key_Up || event->key() == Qt::Key_Down) {
             moveCurrent(event->key() == Qt::Key_Up ? -1 : 1);

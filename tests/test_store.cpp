@@ -43,6 +43,15 @@ private Q_SLOTS:
         QCOMPARE(spy.count(), 0);
     }
 
+    void taskCanBeAddedOnTop()
+    {
+        TodoStore store;
+        store.addTask("A");
+        store.addTask("B");
+        store.addTask("Top", {}, true);
+        QCOMPARE(titles(store.tasks()), QStringList({"Top", "A", "B"}));
+    }
+
     void updateTask()
     {
         TodoStore store;
@@ -223,6 +232,29 @@ private Q_SLOTS:
         const QString t = store.addTask("T");
         QVERIFY(store.setTaskLabels(t, {work, home, "unknown", work}));
         QCOMPARE(store.task(t)->labelIds, QStringList({work, home}));
+    }
+
+    void toggleLabelOnSeveralTasks()
+    {
+        TodoStore store;
+        const QString work = store.addLabel("Work", 0);
+        const QString a = store.addTask("A");
+        const QString b = store.addTask("B");
+        const QString c = store.addTask("C");
+        store.setTaskLabels(a, {work});
+
+        QVERIFY(store.toggleLabel({a, b}, work)); // mixed: added to the rest
+        QCOMPARE(store.task(a)->labelIds, QStringList({work}));
+        QCOMPARE(store.task(b)->labelIds, QStringList({work}));
+        QVERIFY(store.task(c)->labelIds.isEmpty());
+
+        QVERIFY(store.toggleLabel({a, b}, work)); // all have it: removed
+        QVERIFY(store.task(a)->labelIds.isEmpty());
+        QVERIFY(store.task(b)->labelIds.isEmpty());
+
+        QVERIFY(!store.toggleLabel({a}, "unknown"));
+        QVERIFY(!store.toggleLabel({}, work));
+        QVERIFY(!store.toggleLabel({"missing"}, work));
     }
 
     void filterMatchesAnySelectedLabel()

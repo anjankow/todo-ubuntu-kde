@@ -65,7 +65,7 @@ QVector<Task> TodoStore::tasksIn(TaskState state, const QSet<QString> &labelFilt
     return result;
 }
 
-QString TodoStore::addTask(const QString &title, const QString &description)
+QString TodoStore::addTask(const QString &title, const QString &description, bool atTop)
 {
     const QString cleanTitle = title.trimmed();
     if (cleanTitle.isEmpty()) {
@@ -75,7 +75,11 @@ QString TodoStore::addTask(const QString &title, const QString &description)
     t.id = newId();
     t.title = cleanTitle;
     t.description = description.trimmed();
-    m_tasks.append(t);
+    if (atTop) {
+        m_tasks.prepend(t);
+    } else {
+        m_tasks.append(t);
+    }
     Q_EMIT changed();
     return t.id;
 }
@@ -106,6 +110,34 @@ bool TodoStore::setTaskLabels(const QString &id, const QStringList &labelIds)
         }
     }
     m_tasks[i].labelIds = valid;
+    Q_EMIT changed();
+    return true;
+}
+
+bool TodoStore::toggleLabel(const QStringList &ids, const QString &labelId)
+{
+    if (!label(labelId)) {
+        return false;
+    }
+    QVector<int> rows;
+    bool allHaveIt = true;
+    for (const QString &id : ids) {
+        const int i = indexOf(id);
+        if (i >= 0 && !rows.contains(i)) {
+            rows.append(i);
+            allHaveIt = allHaveIt && m_tasks.at(i).labelIds.contains(labelId);
+        }
+    }
+    if (rows.isEmpty()) {
+        return false;
+    }
+    for (int i : std::as_const(rows)) {
+        if (allHaveIt) {
+            m_tasks[i].labelIds.removeAll(labelId);
+        } else if (!m_tasks.at(i).labelIds.contains(labelId)) {
+            m_tasks[i].labelIds.append(labelId);
+        }
+    }
     Q_EMIT changed();
     return true;
 }

@@ -49,8 +49,14 @@ public:
 
     QAction *completeAction() const { return m_complete; }
     QAction *cancelAction() const { return m_cancel; }
+    QAction *postponeAction() const { return m_postpone; }
     QAction *restoreAction() const { return m_restore; }
     QAction *deleteAction() const { return m_delete; }
+    QAction *labelAction() const { return m_label; }
+    // The entry of the Label menu for one label.
+    QAction *labelMenuAction(const QString &labelId) const { return m_labelMenuActions.value(labelId); }
+    QAction *labelsDialogAction() const { return m_labelsDialog; }
+    QAction *storageFolderAction() const { return m_storageFolder; }
     QAction *postponeAction(PostponePreset preset) const { return m_postponePresets.value(preset); }
     QAction *postponeCustomAction() const { return m_postponeCustom; }
 
@@ -68,6 +74,7 @@ private:
     void save();
     void onStoreChanged();
     void rebuildFilterBar();
+    void rebuildLabelMenu();
     void updateActions();
     void updateTabTitles();
     void postponeChecked(const QDateTime &until);
@@ -94,6 +101,11 @@ private:
     QAction *m_postpone = nullptr;
     QAction *m_restore = nullptr;
     QAction *m_delete = nullptr;
+    QAction *m_label = nullptr;
+    QAction *m_labelsDialog = nullptr;
+    QAction *m_storageFolder = nullptr;
+    QMenu *m_labelMenu = nullptr;
+    QMap<QString, QAction *> m_labelMenuActions;
     QAction *m_postponeCustom = nullptr;
     QMap<PostponePreset, QAction *> m_postponePresets;
 };

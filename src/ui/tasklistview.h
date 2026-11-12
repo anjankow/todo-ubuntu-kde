@@ -24,6 +24,7 @@ public:
     QStringList checkedIds() const;
     void setChecked(const QString &id, bool checked);
     void clearChecked();
+    void checkAll();
 
     // Area of the row's checkbox, in viewport coordinates.
     QRect checkRect(int row) const;

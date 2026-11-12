@@ -24,9 +24,13 @@ public:
     QVector<Task> tasksIn(TaskState state, const QSet<QString> &labelFilter = {}) const;
 
     // Returns the new task id, or an empty string if the title is blank.
-    QString addTask(const QString &title, const QString &description = {});
+    // The task goes to the end of the list, or to its start with atTop.
+    QString addTask(const QString &title, const QString &description = {}, bool atTop = false);
     bool updateTask(const QString &id, const QString &title, const QString &description);
     bool setTaskLabels(const QString &id, const QStringList &labelIds);
+    // Adds the label to the given tasks; if all of them already carry it,
+    // removes it from them instead.
+    bool toggleLabel(const QStringList &ids, const QString &labelId);
 
     void complete(const QStringList &ids);
     void cancel(const QStringList &ids);

@@ -1,21 +1,27 @@
 #include "core/storage.h"
 #include "core/todostore.h"
+#include "ui/labelsdialog.h"
 #include "ui/mainwindow.h"
 #include "ui/newtaskedit.h"
 #include "ui/settings.h"
 #include "ui/taskdialog.h"
 #include "ui/tasklistview.h"
 
+#include <KHelpMenu>
 #include <KLocalizedString>
 
 #include <QAction>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMenu>
+#include <QMenuBar>
 #include <QPlainTextEdit>
+#include <QPushButton>
 #include <QStandardPaths>
 #include <QTabWidget>
 #include <QTemporaryDir>
 #include <QTest>
+#include <QToolBar>
 #include <QToolButton>
 
 #include <memory>
@@ -35,6 +41,7 @@ struct Fixture {
     MainWindow::FolderConflict conflictAnswer = MainWindow::FolderConflict::Abort;
     int conflictCalls = 0;
     QDateTime customPostpone;
+    QString chosenFolder;
     QStringList errors;
     std::unique_ptr<MainWindow> window;
 
@@ -64,8 +71,8 @@ struct Fixture {
         hooks.askPostponeTime = [this] {
             return customPostpone;
         };
-        hooks.askFolder = [] {
-            return QString();
+        hooks.askFolder = [this] {
+            return chosenFolder;
         };
         hooks.reportError = [this](const QString &message) {
             errors.append(message);
@@ -78,6 +85,9 @@ struct Fixture {
 
     TodoStore *store() const { return window->store(); }
     TaskListView *view(TaskState state = TaskState::Active) const { return window->view(state); }
+
+    // Adds a task at the end of the list (setup for tests not about typing).
+    void add(const QString &title) { store()->addTask(title); }
 
     void type(const QString &title)
     {
@@ -157,8 +167,8 @@ private Q_SLOTS:
     void tasksSurviveRestart()
     {
         Fixture f;
-        f.type("One");
-        f.type("Two");
+        f.add("One");
+        f.add("Two");
         f.open();
         QCOMPARE(f.shown(), QStringList({"One", "Two"}));
     }
@@ -174,7 +184,7 @@ private Q_SLOTS:
         QCOMPARE(Settings(f.configFile).storageDir(), other.path());
         QCOMPARE(f.conflictCalls, 0);
 
-        f.type("Later");
+        f.add("Later");
         TodoStore disk;
         QVERIFY(Storage::load(disk, other.filePath("todos.json")));
         QCOMPARE(disk.tasks().size(), 2);
@@ -259,17 +269,39 @@ private Q_SLOTS:
         QCOMPARE(f.window->focusWidget(), f.window->newTaskEdit());
 
         f.type("Second"); // straight away, the input is ready again
-        QCOMPARE(f.shown(), QStringList({"First", "Second"}));
+        QCOMPARE(f.shown(), QStringList({"Second", "First"})); // newest on top
         QCOMPARE(f.window->focusWidget(), f.window->newTaskEdit());
     }
 
-    void inputSitsBelowTheList()
+    void inputSitsAboveTheList()
     {
         Fixture f;
         f.type("First");
-        const QPoint listBottom = f.view()->mapTo(f.window.get(), QPoint(0, f.view()->height()));
-        const QPoint inputTop = f.window->newTaskEdit()->mapTo(f.window.get(), QPoint(0, 0));
-        QVERIFY(inputTop.y() >= listBottom.y());
+        NewTaskEdit *input = f.window->newTaskEdit();
+        const QPoint inputBottom = input->mapTo(f.window.get(), QPoint(0, input->height()));
+        const QPoint listTop = f.view()->mapTo(f.window.get(), QPoint(0, 0));
+        QVERIFY(listTop.y() >= inputBottom.y());
+    }
+
+    void inputHasMarginAboveAndBelow()
+    {
+        Fixture f;
+        f.add("A");
+        NewTaskEdit *input = f.window->newTaskEdit();
+        QWidget *page = input->parentWidget();
+        QVERIFY(input->geometry().top() >= 8); // space above
+        const int listTop = f.view()->mapTo(page, QPoint(0, 0)).y();
+        QVERIFY(listTop - input->geometry().bottom() >= 8); // space below
+    }
+
+    void newTaskAppearsOnTopOfTheList()
+    {
+        Fixture f;
+        f.add("Old 1");
+        f.add("Old 2");
+        f.type("New");
+        QCOMPARE(f.shown(), QStringList({"New", "Old 1", "Old 2"}));
+        QCOMPARE(f.savedTitles(), QStringList({"New", "Old 1", "Old 2"}));
     }
 
     void emptyInputCreatesNoTask()
@@ -397,8 +429,8 @@ private Q_SLOTS:
     void completeSingleTask()
     {
         Fixture f;
-        f.type("A");
-        f.type("B");
+        f.add("A");
+        f.add("B");
         f.clickCheckbox(0);
         f.window->completeAction()->trigger();
         QCOMPARE(f.shown(), QStringList({"B"}));
@@ -408,9 +440,9 @@ private Q_SLOTS:
     void batchComplete()
     {
         Fixture f;
-        f.type("A");
-        f.type("B");
-        f.type("C");
+        f.add("A");
+        f.add("B");
+        f.add("C");
         f.clickCheckbox(0);
         f.clickCheckbox(2);
         f.window->completeAction()->trigger();
@@ -422,9 +454,9 @@ private Q_SLOTS:
     void batchCancel()
     {
         Fixture f;
-        f.type("A");
-        f.type("B");
-        f.type("C");
+        f.add("A");
+        f.add("B");
+        f.add("C");
         f.clickCheckbox(0);
         f.clickCheckbox(1);
         f.window->cancelAction()->trigger();
@@ -435,9 +467,9 @@ private Q_SLOTS:
     void batchDeleteNeedsConfirmation()
     {
         Fixture f;
-        f.type("A");
-        f.type("B");
-        f.type("C");
+        f.add("A");
+        f.add("B");
+        f.add("C");
         f.clickCheckbox(0);
         f.clickCheckbox(1);
 
@@ -460,8 +492,8 @@ private Q_SLOTS:
     void singleDeleteIsImmediateAndPermanent()
     {
         Fixture f;
-        f.type("A");
-        f.type("B");
+        f.add("A");
+        f.add("B");
         f.clickCheckbox(0);
         f.window->deleteAction()->trigger();
         QCOMPARE(f.confirmCalls, 0);
@@ -521,8 +553,8 @@ private Q_SLOTS:
     void postponeWithPresetHidesTaskUntilDue()
     {
         Fixture f;
-        f.type("Later");
-        f.type("Now");
+        f.add("Later");
+        f.add("Now");
         f.clickCheckbox(0);
         f.window->postponeAction(PostponePreset::ThreeDays)->trigger();
 
@@ -548,7 +580,7 @@ private Q_SLOTS:
     void postponeWithCustomTime()
     {
         Fixture f;
-        f.type("A");
+        f.add("A");
         f.clickCheckbox(0);
         f.customPostpone = QDateTime(); // dialog cancelled
         f.window->postponeCustomAction()->trigger();
@@ -577,9 +609,9 @@ private Q_SLOTS:
     void reorderWithKeyboard()
     {
         Fixture f;
-        f.type("A");
-        f.type("B");
-        f.type("C");
+        f.add("A");
+        f.add("B");
+        f.add("C");
         f.view()->setCurrentRow(2);
         QTest::keyClick(f.view(), Qt::Key_Up, Qt::ControlModifier);
         QCOMPARE(f.shown(), QStringList({"A", "C", "B"}));
@@ -596,9 +628,9 @@ private Q_SLOTS:
     void reorderByDragAndDrop()
     {
         Fixture f;
-        f.type("A");
-        f.type("B");
-        f.type("C");
+        f.add("A");
+        f.add("B");
+        f.add("C");
         QCOMPARE(f.view()->dragDropMode(), QAbstractItemView::InternalMove);
         QCOMPARE(f.view(TaskState::Completed)->dragDropMode(), QAbstractItemView::NoDragDrop);
 
@@ -611,7 +643,250 @@ private Q_SLOTS:
         QCOMPARE(f.shown(), QStringList({"C", "A", "B"}));
     }
 
+    // --- task card state buttons ---
+
+    void cardCompletesTask()
+    {
+        Fixture f;
+        const QString id = f.store()->addTask("Title");
+        f.add("Other");
+        f.clickTitle(0);
+        auto *card = f.window->findChild<TaskDialog *>();
+        QVERIFY(card);
+        card->titleEdit()->setText("Edited"); // edits are kept
+        card->completeButton()->click();
+        QVERIFY(!card->isVisible());
+        QCOMPARE(f.store()->task(id)->state, TaskState::Completed);
+        QCOMPARE(f.shown(), QStringList({"Other"}));
+        QCOMPARE(f.shown(TaskState::Completed), QStringList({"Edited"}));
+    }
+
+    void cardCancelsTask()
+    {
+        Fixture f;
+        const QString id = f.store()->addTask("Title");
+        TaskDialog *card = f.window->openTaskCard(id);
+        card->cancelTaskButton()->click();
+        QVERIFY(!card->isVisible());
+        QCOMPARE(f.store()->task(id)->state, TaskState::Cancelled);
+        QCOMPARE(f.shown(TaskState::Cancelled), QStringList({"Title"}));
+    }
+
+    void cardPostponesTask()
+    {
+        Fixture f;
+        const QString a = f.store()->addTask("A");
+        const QString b = f.store()->addTask("B");
+
+        TaskDialog *card = f.window->openTaskCard(a);
+        QVERIFY(card->postponeButton()->menu());
+        card->postponeAction(PostponePreset::OneWeek)->trigger();
+        QVERIFY(!card->isVisible());
+        QCOMPARE(f.store()->task(a)->state, TaskState::Postponed);
+        QCOMPARE(f.store()->task(a)->postponedUntil, QDate(2026, 11, 19).startOfDay());
+
+        card = f.window->openTaskCard(b);
+        f.customPostpone = QDateTime(); // time dialog cancelled: nothing happens
+        card->postponeCustomAction()->trigger();
+        QVERIFY(card->isVisible());
+        QCOMPARE(f.store()->task(b)->state, TaskState::Active);
+        f.customPostpone = QDateTime(QDate(2027, 1, 1), QTime(9, 0));
+        card->postponeCustomAction()->trigger();
+        QVERIFY(!card->isVisible());
+        QCOMPARE(f.store()->task(b)->postponedUntil, f.customPostpone);
+        QVERIFY(f.shown().isEmpty());
+    }
+
+    void cardStateButtonsFollowTheTaskState()
+    {
+        Fixture f;
+        const QString done = f.store()->addTask("Done");
+        const QString cancelled = f.store()->addTask("Cancelled");
+        f.store()->complete({done});
+        f.store()->cancel({cancelled});
+
+        TaskDialog *card = f.window->openTaskCard(done);
+        QVERIFY(!card->completeButton()->isEnabled());
+        QVERIFY(card->cancelTaskButton()->isEnabled());
+        QVERIFY(!card->postponeButton()->isEnabled());
+        card->reject();
+
+        card = f.window->openTaskCard(cancelled);
+        QVERIFY(card->completeButton()->isEnabled());
+        QVERIFY(!card->cancelTaskButton()->isEnabled());
+        card->completeButton()->click();
+        QCOMPARE(f.store()->task(cancelled)->state, TaskState::Completed);
+    }
+
+    void cardStateButtonNeedsATitle()
+    {
+        Fixture f;
+        const QString id = f.store()->addTask("Title");
+        TaskDialog *card = f.window->openTaskCard(id);
+        card->titleEdit()->clear();
+        card->completeButton()->click();
+        QVERIFY(card->isVisible());
+        QCOMPARE(f.store()->task(id)->state, TaskState::Active);
+        card->reject();
+    }
+
+    // --- select all ---
+
+    void ctrlASelectsAllTasks()
+    {
+        Fixture f;
+        f.add("A");
+        f.add("B");
+        f.add("C");
+        f.view()->setFocus();
+        QTest::keyClick(f.view(), Qt::Key_A, Qt::ControlModifier);
+        QCOMPARE(f.view()->checkedIds().size(), 3);
+        QVERIFY(f.window->completeAction()->isEnabled());
+        f.window->completeAction()->trigger();
+        QVERIFY(f.shown().isEmpty());
+        QCOMPARE(f.shown(TaskState::Completed), QStringList({"A", "B", "C"}));
+    }
+
+    void ctrlAInEmptyInputSelectsAllTasks()
+    {
+        Fixture f;
+        f.add("A");
+        f.add("B");
+        f.window->newTaskEdit()->setFocus();
+        QTest::keyClick(f.window->newTaskEdit(), Qt::Key_A, Qt::ControlModifier);
+        QCOMPARE(f.view()->checkedIds().size(), 2);
+    }
+
+    void ctrlAInInputWithTextSelectsTheText()
+    {
+        Fixture f;
+        f.add("A");
+        f.window->newTaskEdit()->setFocus();
+        QTest::keyClicks(f.window->newTaskEdit(), "draft");
+        QTest::keyClick(f.window->newTaskEdit(), Qt::Key_A, Qt::ControlModifier);
+        QVERIFY(f.view()->checkedIds().isEmpty());
+        QCOMPARE(f.window->newTaskEdit()->textCursor().selectedText(), QString("draft"));
+    }
+
+    void ctrlASelectsOnlyTheCurrentTab()
+    {
+        Fixture f;
+        f.add("A");
+        const QString done = f.store()->addTask("Done");
+        f.store()->complete({done});
+        f.showTab(TaskState::Completed);
+        f.view(TaskState::Completed)->setFocus();
+        QTest::keyClick(f.view(TaskState::Completed), Qt::Key_A, Qt::ControlModifier);
+        QCOMPARE(f.view(TaskState::Completed)->checkedIds(), QStringList({done}));
+        QVERIFY(f.view()->checkedIds().isEmpty());
+    }
+
+    // --- window layout ---
+
+    void toolbarButtonsAllFitInTheInitialWindow()
+    {
+        Fixture f;
+        auto *toolbar = f.window->findChild<QToolBar *>("mainToolBar");
+        QVERIFY(toolbar);
+        const QList<QAction *> actions = {f.window->completeAction(), f.window->cancelAction(), f.window->postponeAction(), f.window->restoreAction(),
+            f.window->deleteAction(), f.window->labelAction(), f.window->labelsDialogAction(), f.window->storageFolderAction()};
+        for (QAction *action : actions) {
+            QWidget *button = toolbar->widgetForAction(action);
+            QVERIFY2(button, qPrintable(action->text()));
+            QVERIFY2(button->isVisible(), qPrintable(action->text()));
+            QVERIFY2(toolbar->rect().contains(button->geometry()), qPrintable(action->text()));
+        }
+        QVERIFY(!toolbar->findChild<QWidget *>("qt_toolbar_ext_button")->isVisible());
+    }
+
+    void tasksUseLargerFontAndSpacing()
+    {
+        Fixture f;
+        f.add("A");
+        f.add("B");
+        const int base = QApplication::font().pointSize();
+        QCOMPARE(f.view()->font().pointSize(), base + 2);
+        QCOMPARE(f.window->newTaskEdit()->font().pointSize(), base + 2);
+        QCOMPARE(f.view()->spacing(), 4);
+        const QRect first = f.view()->visualRect(f.view()->model()->index(0, 0));
+        const QRect second = f.view()->visualRect(f.view()->model()->index(1, 0));
+        QVERIFY(second.top() - first.bottom() >= 8); // a gap between the rows
+    }
+
+    void thereIsNoMenuBar()
+    {
+        Fixture f;
+        QVERIFY(!f.window->findChild<QMenuBar *>());
+        QVERIFY(!f.window->findChild<KHelpMenu *>());
+    }
+
+    void labelsButtonOpensLabelsDialog()
+    {
+        Fixture f;
+        QVERIFY(!f.window->findChild<LabelsDialog *>());
+        f.window->labelsDialogAction()->trigger();
+        auto *dialog = f.window->findChild<LabelsDialog *>();
+        QVERIFY(dialog);
+        QVERIFY(dialog->isVisible());
+        dialog->reject();
+    }
+
+    void storageFolderButtonChangesTheFolder()
+    {
+        Fixture f;
+        f.add("Task");
+        QTemporaryDir other;
+        f.chosenFolder = other.path();
+        f.window->storageFolderAction()->trigger();
+        QCOMPARE(f.window->storagePath(), other.filePath("todos.json"));
+        QVERIFY(QFile::exists(other.filePath("todos.json")));
+    }
+
     // --- labels ---
+
+    void labelSelectedTasks()
+    {
+        Fixture f;
+        const QString work = f.store()->addLabel("Work", 0);
+        const QString home = f.store()->addLabel("Home", 1);
+        const QString a = f.store()->addTask("A");
+        const QString b = f.store()->addTask("B");
+        const QString c = f.store()->addTask("C");
+        f.store()->setTaskLabels(a, {work});
+
+        QVERIFY(!f.window->labelAction()->isEnabled()); // nothing selected
+        QVERIFY(f.window->labelMenuAction(work));
+        QCOMPARE(f.window->labelMenuAction(home)->text(), QString("Home"));
+
+        f.clickCheckbox(0);
+        f.clickCheckbox(1);
+        QVERIFY(f.window->labelAction()->isEnabled());
+
+        // Not all selected tasks have it yet: it is added to those missing it.
+        f.window->labelMenuAction(work)->trigger();
+        QCOMPARE(f.store()->task(a)->labelIds, QStringList({work}));
+        QCOMPARE(f.store()->task(b)->labelIds, QStringList({work}));
+        QVERIFY(f.store()->task(c)->labelIds.isEmpty());
+        QCOMPARE(f.view()->checkedIds().size(), 2); // selection is kept
+
+        f.window->labelMenuAction(home)->trigger();
+        QCOMPARE(f.store()->task(a)->labelIds, QStringList({work, home}));
+
+        // All selected tasks have it: it is removed from them.
+        f.window->labelMenuAction(work)->trigger();
+        QCOMPARE(f.store()->task(a)->labelIds, QStringList({home}));
+        QCOMPARE(f.store()->task(b)->labelIds, QStringList({home}));
+    }
+
+    void labelActionNeedsLabels()
+    {
+        Fixture f;
+        f.add("A");
+        f.clickCheckbox(0);
+        QVERIFY(!f.window->labelAction()->isEnabled());
+        f.store()->addLabel("Work", 0);
+        QVERIFY(f.window->labelAction()->isEnabled());
+    }
 
     void filterByLabels()
     {

@@ -8,7 +8,6 @@
 #include "taskdialog.h"
 #include "tasklistview.h"
 
-#include <KHelpMenu>
 #include <KLocalizedString>
 #include <KMessageBox>
 #include <KStandardGuiItem>
@@ -23,7 +22,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMenu>
-#include <QMenuBar>
+#include <QShortcut>
 #include <QTabWidget>
 #include <QToolBar>
 #include <QToolButton>
@@ -112,10 +111,11 @@ MainWindow::MainWindow(const QString &configFile, Hooks hooks, QWidget *parent)
         if (state == TaskState::Active) {
             auto *page = new QWidget(m_tabs);
             auto *pageLayout = new QVBoxLayout(page);
-            pageLayout->setContentsMargins(0, 0, 0, 0);
-            pageLayout->addWidget(view);
+            pageLayout->setContentsMargins(0, 8, 0, 0); // margin above the input
+            pageLayout->setSpacing(8); // and between the input and the list
             m_newTask = new NewTaskEdit(page);
             pageLayout->addWidget(m_newTask);
+            pageLayout->addWidget(view);
             m_tabs->addTab(page, QString());
         } else {
             m_tabs->addTab(view, QString());
@@ -124,9 +124,16 @@ MainWindow::MainWindow(const QString &configFile, Hooks hooks, QWidget *parent)
     setCentralWidget(central);
 
     connect(m_newTask, &NewTaskEdit::taskSubmitted, this, [this](const QString &title, const QString &description) {
-        m_store->addTask(title, description);
-        view(TaskState::Active)->scrollToBottom();
+        m_store->addTask(title, description, true); // new tasks appear right under the input
+        view(TaskState::Active)->scrollToTop();
         m_newTask->setFocus();
+    });
+    connect(m_newTask, &NewTaskEdit::selectAllTasksRequested, this, [this] {
+        currentView()->checkAll();
+    });
+    auto *selectAll = new QShortcut(QKeySequence::SelectAll, this);
+    connect(selectAll, &QShortcut::activated, this, [this] {
+        currentView()->checkAll();
     });
     connect(m_tabs, &QTabWidget::currentChanged, this, &MainWindow::updateActions);
 
@@ -135,7 +142,8 @@ MainWindow::MainWindow(const QString &configFile, Hooks hooks, QWidget *parent)
     m_storageDir = m_settings.storageDir();
     connect(m_store, &TodoStore::changed, this, &MainWindow::onStoreChanged);
     loadFromDisk();
-    resize(520, 640);
+    // Wide enough for every toolbar button.
+    resize(qMax(520, sizeHint().width()), 640);
 }
 
 void MainWindow::setupActions()
@@ -145,6 +153,13 @@ void MainWindow::setupActions()
     m_postpone = new QAction(QIcon::fromTheme(QStringLiteral("chronometer")), i18nc("@action", "Postpone"), this);
     m_restore = new QAction(QIcon::fromTheme(QStringLiteral("edit-undo")), i18nc("@action", "Restore"), this);
     m_delete = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18nc("@action", "Delete"), this);
+    m_label = new QAction(QIcon::fromTheme(QStringLiteral("tag")), i18nc("@action", "Label"), this);
+    m_labelMenu = new QMenu(this);
+    m_label->setMenu(m_labelMenu);
+    m_labelsDialog = new QAction(QIcon::fromTheme(QStringLiteral("configure")), i18nc("@action", "Labels…"), this);
+    m_storageFolder = new QAction(QIcon::fromTheme(QStringLiteral("folder")), i18nc("@action", "Storage folder…"), this);
+    connect(m_labelsDialog, &QAction::triggered, this, &MainWindow::showLabelsDialog);
+    connect(m_storageFolder, &QAction::triggered, this, &MainWindow::chooseStorageDir);
 
     auto *postponeMenu = new QMenu(this);
     const QList<QPair<PostponePreset, QString>> presets = {
@@ -181,19 +196,21 @@ void MainWindow::setupActions()
     auto *toolbar = new QToolBar(i18nc("@title:menu", "Main Toolbar"), this);
     toolbar->setObjectName(QStringLiteral("mainToolBar"));
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
-    toolbar->addActions({m_complete, m_cancel, m_postpone, m_restore, m_delete});
-    if (auto *button = qobject_cast<QToolButton *>(toolbar->widgetForAction(m_postpone))) {
-        button->setPopupMode(QToolButton::InstantPopup);
+    toolbar->setMovable(false);
+    toolbar->addActions({m_complete, m_cancel, m_postpone, m_restore, m_delete, m_label});
+    toolbar->addSeparator();
+    toolbar->addActions({m_labelsDialog, m_storageFolder});
+    for (QAction *action : {m_postpone, m_label}) {
+        if (auto *button = qobject_cast<QToolButton *>(toolbar->widgetForAction(action))) {
+            button->setPopupMode(QToolButton::InstantPopup);
+        }
     }
     addToolBar(toolbar);
 
-    QMenu *fileMenu = menuBar()->addMenu(i18nc("@title:menu", "&File"));
-    fileMenu->addAction(QIcon::fromTheme(QStringLiteral("tag")), i18nc("@action", "Labels…"), this, &MainWindow::showLabelsDialog);
-    fileMenu->addAction(QIcon::fromTheme(QStringLiteral("folder")), i18nc("@action", "Storage folder…"), this, &MainWindow::chooseStorageDir);
-    fileMenu->addSeparator();
-    fileMenu->addAction(QIcon::fromTheme(QStringLiteral("application-exit")), i18nc("@action", "Quit"), this, &QWidget::close, QKeySequence::Quit);
-    auto *helpMenu = new KHelpMenu(this);
-    menuBar()->addMenu(helpMenu->menu());
+    auto *quit = new QAction(this);
+    quit->setShortcut(QKeySequence::Quit);
+    connect(quit, &QAction::triggered, this, &QWidget::close);
+    addAction(quit);
 }
 
 TaskListView *MainWindow::currentView() const
@@ -244,6 +261,7 @@ void MainWindow::onStoreChanged()
         save();
     }
     rebuildFilterBar();
+    rebuildLabelMenu();
     const QList<TaskListView *> views = m_views.values();
     for (TaskListView *view : views) {
         view->setLabelFilter(m_filter);
@@ -293,6 +311,21 @@ void MainWindow::rebuildFilterBar()
     m_filterBar->setVisible(!m_store->labels().isEmpty());
 }
 
+void MainWindow::rebuildLabelMenu()
+{
+    m_labelMenu->clear();
+    m_labelMenuActions.clear();
+    for (const Label &label : m_store->labels()) {
+        QPixmap swatch(12, 12);
+        swatch.fill(labelPalette().at(label.color));
+        QAction *action = m_labelMenu->addAction(QIcon(swatch), label.name);
+        m_labelMenuActions.insert(label.id, action);
+        connect(action, &QAction::triggered, this, [this, id = label.id] {
+            m_store->toggleLabel(currentView()->checkedIds(), id);
+        });
+    }
+}
+
 QToolButton *MainWindow::filterButton(const QString &labelId) const
 {
     return m_filterButtons.value(labelId);
@@ -322,6 +355,7 @@ void MainWindow::updateActions()
     m_cancel->setEnabled(any && state != TaskState::Cancelled);
     m_postpone->setEnabled(any && (state == TaskState::Active || state == TaskState::Postponed));
     m_restore->setEnabled(any && state != TaskState::Active);
+    m_label->setEnabled(any && !m_store->labels().isEmpty());
     m_delete->setEnabled(any);
 }
 
@@ -350,7 +384,7 @@ TaskDialog *MainWindow::openTaskCard(const QString &taskId)
     if (!m_store->task(taskId)) {
         return nullptr;
     }
-    auto *dialog = new TaskDialog(m_store, taskId, this);
+    auto *dialog = new TaskDialog(m_store, taskId, {m_hooks.now, m_hooks.askPostponeTime}, this);
     dialog->setAttribute(Qt::WA_DeleteOnClose);
     dialog->open();
     return dialog;
