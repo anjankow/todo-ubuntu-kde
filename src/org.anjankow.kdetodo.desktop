@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Todo
+Comment=A simple todo list stored in a text file
+Exec=kdetodo
+Icon=view-task
+Categories=Qt;KDE;Office;ProjectManagement;
+Terminal=false
