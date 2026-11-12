@@ -8,6 +8,9 @@ NewTaskEdit::NewTaskEdit(QWidget *parent)
     : QPlainTextEdit(parent)
 {
     setObjectName(QStringLiteral("newTaskEdit"));
+    QFont taskFont = font(); // same size as the tasks in the list
+    taskFont.setPointSize(taskFont.pointSize() + 2);
+    setFont(taskFont);
     setPlaceholderText(i18n("New task… (Shift+Enter adds a description, Enter saves)"));
     setTabChangesFocus(true);
     setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -39,6 +42,11 @@ void NewTaskEdit::keyPressEvent(QKeyEvent *event)
         } else {
             submit();
         }
+        event->accept();
+        return;
+    }
+    if (event->matches(QKeySequence::SelectAll) && toPlainText().isEmpty()) {
+        Q_EMIT selectAllTasksRequested();
         event->accept();
         return;
     }

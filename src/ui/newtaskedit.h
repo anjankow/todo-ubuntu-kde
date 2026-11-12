@@ -15,6 +15,8 @@ public:
 
 Q_SIGNALS:
     void taskSubmitted(const QString &title, const QString &description);
+    // Ctrl+A in the empty input: there is no text to select.
+    void selectAllTasksRequested();
 
 protected:
     void keyPressEvent(QKeyEvent *event) override;
