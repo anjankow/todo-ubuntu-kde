@@ -1,0 +1,77 @@
+name: Release
+
+# Started by hand: Actions -> Release -> Run workflow, on branch main.
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Which part of the version to increase
+        required: true
+        type: choice
+        default: patch
+        options:
+          - patch
+          - minor
+          - major
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Release (${{ inputs.bump }})
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Only release from main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "::error::Releases are made from main, not from ${{ github.ref_name }}"
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Determine version
+        id: version
+        run: |
+          version="$(scripts/next-version.sh "${{ inputs.bump }}")"
+          if git rev-parse -q --verify "refs/tags/v${version}" >/dev/null; then
+            echo "::error::Tag v${version} already exists"
+            exit 1
+          fi
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "Releasing v${version}" >> "$GITHUB_STEP_SUMMARY"
+      - uses: ./.github/actions/setup
+        with:
+          extra-packages: dpkg-dev curl file libqt5svg5
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=ON -DKDETODO_WERROR=ON \
+            -DKDETODO_VERSION="${{ steps.version.outputs.version }}"
+          cmake --build build
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: ctest --test-dir build --output-on-failure --timeout 300
+      - name: Build packages
+        run: |
+          version="${{ steps.version.outputs.version }}"
+          (cd build && cpack -G DEB)
+          dpkg-deb --info build/*.deb
+          scripts/build-appimage.sh build "$version"
+          # release files: kdetodo-<version>.deb and kdetodo-<version>.AppImage
+          mkdir dist
+          mv build/*.deb "dist/kdetodo-${version}.deb"
+          mv build/*.AppImage "dist/kdetodo-${version}.AppImage"
+          ls -l dist
+      - name: Tag and publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="v${{ steps.version.outputs.version }}"
+          git tag "$tag"
+          git push origin "$tag"
+          gh release create "$tag" dist/* --title "$tag" --generate-notes --verify-tag

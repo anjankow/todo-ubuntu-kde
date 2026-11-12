@@ -29,4 +29,3 @@ add_executable(kdetodo main.cpp)
 target_link_libraries(kdetodo PRIVATE kdetodoui)
 
 install(TARGETS kdetodo ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})
-install(FILES org.anjankow.kdetodo.desktop DESTINATION ${KDE_INSTALL_APPDIR})

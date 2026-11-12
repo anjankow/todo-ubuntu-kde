@@ -1,5 +1,8 @@
 cmake_minimum_required(VERSION 3.16)
-project(kdetodo VERSION 0.1.0 LANGUAGES CXX)
+# The release workflow passes the version; local builds use the default.
+set(KDETODO_VERSION "0.1.0" CACHE STRING "Application version (MAJOR.MINOR.PATCH)")
+set(KDETODO_VERSION_SUFFIX "" CACHE STRING "Suffix of the package version, e.g. +git1a2b3c4")
+project(kdetodo VERSION ${KDETODO_VERSION} LANGUAGES CXX)
 
 set(QT_MIN_VERSION 5.15.0)
 set(KF5_MIN_VERSION 5.100.0)
@@ -38,9 +41,29 @@ add_definitions(-DTRANSLATION_DOMAIN="kdetodo" -DKDETODO_VERSION="${PROJECT_VERS
 
 add_subdirectory(src)
 
+install(FILES data/org.anjankow.kdetodo.desktop DESTINATION ${KDE_INSTALL_APPDIR})
+install(FILES data/org.anjankow.kdetodo.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
+
 include(CTest)
 if(BUILD_TESTING)
     add_subdirectory(tests)
 endif()
+
+# ---- Debian package (cpack -G DEB)
+set(CPACK_GENERATOR "DEB")
+set(CPACK_PACKAGE_NAME "kdetodo")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}${KDETODO_VERSION_SUFFIX}")
+set(CPACK_PACKAGE_CONTACT "anjankow <anjankow@protonmail.com>")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A simple todo list stored in a text file (KDE)")
+set(CPACK_PACKAGE_HOMEPAGE_URL "https://github.com/anjankow/todo-ubuntu-kde")
+set(CPACK_RESOURCE_FILE_LICENSE "${CMAKE_SOURCE_DIR}/LICENSE")
+set(CPACK_PACKAGING_INSTALL_PREFIX "/usr")
+set(CPACK_STRIP_FILES ON)
+set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
+set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
+set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
+set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt5svg5") # the application icon is an SVG file
+include(CPack)
 
 feature_summary(WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAGES)

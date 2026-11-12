@@ -16,7 +16,7 @@ int main(int argc, char **argv)
     about.setLicenseText(QStringLiteral("MIT License"));
     about.addAuthor(QStringLiteral("anjankow"), QString(), QStringLiteral("anjankow@protonmail.com"));
     KAboutData::setApplicationData(about);
-    QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("view-task")));
+    QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("org.anjankow.kdetodo"), QIcon::fromTheme(QStringLiteral("view-task"))));
 
     QCommandLineParser parser;
     about.setupCommandLine(&parser);

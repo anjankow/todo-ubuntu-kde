@@ -13,24 +13,24 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  DEPS: >-
-    build-essential cmake ninja-build extra-cmake-modules qtbase5-dev
-    libkf5coreaddons-dev libkf5i18n-dev libkf5config-dev
-    libkf5widgetsaddons-dev libkf5xmlgui-dev
   QT_QPA_PLATFORM: offscreen
 
 jobs:
   format:
-    name: Formatting
+    name: Formatting and scripts
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install clang-format
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-format
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-format shellcheck desktop-file-utils
       - name: Check formatting
         run: >-
           find src tests -name '*.cpp' -o -name '*.h'
           | xargs clang-format --dry-run --Werror
+      - name: Check shell scripts
+        run: shellcheck -x -P SCRIPTDIR scripts/*.sh scripts/lib/*.sh packaging/appimage/*.sh
+      - name: Validate desktop file
+        run: desktop-file-validate data/org.anjankow.kdetodo.desktop
 
   build-test:
     name: Build and test (${{ matrix.compiler }})
@@ -45,8 +45,9 @@ jobs:
             cxx: clang++
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang
+      - uses: ./.github/actions/setup
+        with:
+          extra-packages: clang
       - name: Configure
         run: >-
           cmake -S . -B build -G Ninja
@@ -57,7 +58,7 @@ jobs:
         run: cmake --build build
       - name: Test
         run: ctest --test-dir build --output-on-failure
-      - name: Install
+      - name: Install (staging)
         run: DESTDIR="$PWD/stage" cmake --install build && test -x stage/usr/bin/kdetodo
 
   sanitizers:
@@ -65,8 +66,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS
+      - uses: ./.github/actions/setup
       - name: Configure
         run: >-
           cmake -S . -B build -G Ninja
@@ -87,11 +87,43 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
-      - name: Install dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends $DEPS clang-tidy
+      - uses: ./.github/actions/setup
+        with:
+          extra-packages: clang-tidy
       - name: Configure
         run: cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Debug
       - name: Build (generates moc files)
         run: cmake --build build
       - name: Run clang-tidy
         run: run-clang-tidy -quiet -p build "$PWD/(src|tests)/.*\.cpp$"
+
+  binary:
+    name: Test binary for run-latest-build.sh
+    # Only for merges to main: scripts/run-latest-build.sh takes this binary.
+    # Release packages are built by release.yml. It runs next to the tests:
+    # the script only takes binaries from runs that passed as a whole.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: ./.github/actions/setup
+      - name: Determine version
+        id: version
+        run: |
+          base="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)"
+          base="${base#v}"
+          echo "base=${base:-0.1.0}" >> "$GITHUB_OUTPUT"
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTING=OFF \
+            -DKDETODO_VERSION="${{ steps.version.outputs.base }}"
+          cmake --build build
+          strip build/bin/kdetodo
+          build/bin/kdetodo --version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kdetodo-bin
+          path: build/bin/kdetodo
+          if-no-files-found: error

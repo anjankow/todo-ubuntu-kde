@@ -20,6 +20,15 @@ Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
   assign them in the task card; filter with the label buttons above the list
   (a task is shown if it has any of the selected labels).
 
+## Install
+
+Releases are on the [Releases](https://github.com/anjankow/todo-ubuntu-kde/releases) page
+(made with *Actions → Release → Run workflow* on `main`).
+
+- `scripts/install-deb.sh [latest | <version>]` – downloads the Debian package and installs it with apt.
+- `scripts/run-appimage.sh [latest | <version>]` – downloads the AppImage and starts it; nothing is installed.
+- `scripts/run-latest-build.sh` – runs the binary CI built for the latest merge to `main` (needs `gh`, signed in).
+
 ## Build
 
 ```bash

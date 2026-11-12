@@ -1,0 +1,25 @@
+name: Set up build environment
+description: Installs the build dependencies.
+
+inputs:
+  extra-packages:
+    description: Additional apt packages for this job
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies
+      shell: bash
+      env:
+        PACKAGES: >-
+          build-essential cmake ninja-build extra-cmake-modules qtbase5-dev
+          libkf5coreaddons-dev libkf5i18n-dev libkf5config-dev
+          libkf5widgetsaddons-dev libkf5xmlgui-dev
+          ${{ inputs.extra-packages }}
+      run: |
+        # rebuilding the manual page index after every install is slow and useless here
+        sudo rm -f /var/lib/man-db/auto-update
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends $PACKAGES
