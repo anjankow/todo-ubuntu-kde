@@ -111,7 +111,8 @@ MainWindow::MainWindow(const QString &configFile, Hooks hooks, QWidget *parent)
         if (state == TaskState::Active) {
             auto *page = new QWidget(m_tabs);
             auto *pageLayout = new QVBoxLayout(page);
-            pageLayout->setContentsMargins(0, 0, 0, 0);
+            pageLayout->setContentsMargins(0, 8, 0, 0); // margin above the input
+            pageLayout->setSpacing(8); // and between the input and the list
             m_newTask = new NewTaskEdit(page);
             pageLayout->addWidget(m_newTask);
             pageLayout->addWidget(view);

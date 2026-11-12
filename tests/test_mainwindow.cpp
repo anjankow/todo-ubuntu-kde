@@ -283,6 +283,17 @@ private Q_SLOTS:
         QVERIFY(listTop.y() >= inputBottom.y());
     }
 
+    void inputHasMarginAboveAndBelow()
+    {
+        Fixture f;
+        f.add("A");
+        NewTaskEdit *input = f.window->newTaskEdit();
+        QWidget *page = input->parentWidget();
+        QVERIFY(input->geometry().top() >= 8); // space above
+        const int listTop = f.view()->mapTo(page, QPoint(0, 0)).y();
+        QVERIFY(listTop - input->geometry().bottom() >= 8); // space below
+    }
+
     void newTaskAppearsOnTopOfTheList()
     {
         Fixture f;
