@@ -87,7 +87,13 @@ struct Ui : TestEnv {
         QTRY_VERIFY(object(menu)->property("opened").toBool());
         click(entry);
     }
-    void clickTask(const QString &taskId) { QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, onTitle(taskId)); }
+    void clickTask(const QString &taskId)
+    {
+        QTRY_VERIFY(row(taskId)); // the lists are rebuilt after every change
+        QTest::qWait(30); // and a new row needs a moment to get its place
+        QTest::mouseClick(window, Qt::LeftButton, Qt::NoModifier, onTitle(taskId));
+        QTRY_COMPARE(app->currentModel()->currentId(), taskId);
+    }
     void doubleClickTask(const QString &taskId)
     {
         clickTask(taskId);
