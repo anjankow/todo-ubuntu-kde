@@ -22,12 +22,14 @@ struct TestEnv {
     {
         configFile = dir.filePath("kdetodorc");
         Settings(configFile).setStorageDir(dir.path());
-        open();
+        createController();
     }
     virtual ~TestEnv() = default;
 
     // (Re)creates the controller, like starting the application again.
-    virtual void open()
+    virtual void open() { createController(); }
+
+    void createController()
     {
         app = std::make_unique<AppController>(configFile, [this] {
             return now;
