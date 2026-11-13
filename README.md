@@ -1,5 +1,7 @@
 # todo-ubuntu-kde
 
+![Demo: adding tasks, labels and filters, postponing, cancelling and completing tasks, mostly with keyboard shortcuts](docs/demo.gif)
+
 A simple todo list for KDE Plasma 5 (Qt Quick + Kirigami, KDE Frameworks 5).
 Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
 (your home directory by default; change it with *Settings* → *Storage folder…*).
