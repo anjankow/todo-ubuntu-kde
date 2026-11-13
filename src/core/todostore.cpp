@@ -194,6 +194,30 @@ void TodoStore::remove(const QStringList &ids)
     }
 }
 
+QStringList TodoStore::duplicate(const QStringList &ids)
+{
+    QVector<Task> copies;
+    for (const Task &t : std::as_const(m_tasks)) { // in list order
+        if (ids.contains(t.id)) {
+            Task copy;
+            copy.id = newId();
+            copy.title = t.title;
+            copy.description = t.description;
+            copy.labelIds = t.labelIds;
+            copies.append(copy);
+        }
+    }
+    QStringList newIds;
+    for (const Task &copy : std::as_const(copies)) {
+        m_tasks.append(copy);
+        newIds.append(copy.id);
+    }
+    if (!newIds.isEmpty()) {
+        Q_EMIT changed();
+    }
+    return newIds;
+}
+
 int TodoStore::releaseDuePostponed(const QDateTime &now)
 {
     QStringList due;

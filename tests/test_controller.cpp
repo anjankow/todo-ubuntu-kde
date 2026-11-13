@@ -1,0 +1,602 @@
+#include "testenv.h"
+
+#include <QClipboard>
+#include <QGuiApplication>
+#include <QSignalSpy>
+#include <QStandardPaths>
+#include <QTest>
+
+class TestController : public QObject
+{
+    Q_OBJECT
+private Q_SLOTS:
+    void initTestCase() { QStandardPaths::setTestModeEnabled(true); }
+
+    // --- storage location ---
+
+    void homeDirectoryIsTheDefaultLocation()
+    {
+        QTemporaryDir dir;
+        const Settings settings(dir.filePath("emptyrc"));
+        QCOMPARE(settings.storageDir(), QDir::homePath());
+    }
+
+    void todosAreStoredAsTextFileInSelectedFolder()
+    {
+        TestEnv t;
+        QVERIFY(t.app->addTask("Buy milk"));
+        QCOMPARE(t.app->storageDir(), t.dir.path());
+        QCOMPARE(t.app->storagePath(), t.dir.filePath("todos.json"));
+        QVERIFY(QFile::exists(t.dir.filePath("todos.json")));
+        QCOMPARE(t.savedTitles(), QStringList({"Buy milk"}));
+    }
+
+    void tasksSurviveRestart()
+    {
+        TestEnv t;
+        t.add("One");
+        t.add("Two");
+        t.open();
+        QCOMPARE(t.shown(), QStringList({"One", "Two"}));
+    }
+
+    void changingFolderMovesTheFile()
+    {
+        TestEnv t;
+        t.add("Task");
+        QTemporaryDir other;
+        QSignalSpy spy(t.app.get(), &AppController::storageDirChanged);
+        QCOMPARE(t.app->changeStorageDir(other.path()), AppController::FolderChanged);
+        QCOMPARE(spy.count(), 1);
+        QVERIFY(QFile::exists(other.filePath("todos.json")));
+        QVERIFY(!QFile::exists(t.dir.filePath("todos.json")));
+        QCOMPARE(Settings(t.configFile).storageDir(), other.path());
+
+        t.add("Later");
+        TodoStore disk;
+        QVERIFY(Storage::load(disk, other.filePath("todos.json")));
+        QCOMPARE(disk.tasks().size(), 2);
+
+        t.open(); // the new location is remembered
+        QCOMPARE(t.shown(), QStringList({"Task", "Later"}));
+    }
+
+    void changingFolderReportsAnExistingTodoFile()
+    {
+        QTemporaryDir other;
+        TodoStore existing;
+        existing.addTask("Existing");
+        QVERIFY(Storage::save(existing, other.filePath("todos.json")));
+
+        TestEnv t;
+        t.add("Mine");
+        QCOMPARE(t.app->changeStorageDir(other.path()), AppController::FolderConflict);
+        QCOMPARE(t.app->storagePath(), t.dir.filePath("todos.json")); // nothing happened yet
+        QCOMPARE(t.shown(), QStringList({"Mine"}));
+
+        QCOMPARE(t.app->changeStorageDir(other.path(), AppController::LoadExisting), AppController::FolderChanged);
+        QCOMPARE(t.shown(), QStringList({"Existing"}));
+        QVERIFY(QFile::exists(t.dir.filePath("todos.json"))); // nothing destroyed
+    }
+
+    void changingFolderCanOverwriteExistingFile()
+    {
+        QTemporaryDir other;
+        TodoStore existing;
+        existing.addTask("Existing");
+        QVERIFY(Storage::save(existing, other.filePath("todos.json")));
+
+        TestEnv t;
+        t.add("Mine");
+        QCOMPARE(t.app->changeStorageDir(other.path(), AppController::Overwrite), AppController::FolderChanged);
+        QCOMPARE(t.shown(), QStringList({"Mine"}));
+        QVERIFY(!QFile::exists(t.dir.filePath("todos.json")));
+        TodoStore disk;
+        QVERIFY(Storage::load(disk, other.filePath("todos.json")));
+        QCOMPARE(disk.tasks().size(), 1);
+        QCOMPARE(disk.tasks().at(0).title, QString("Mine"));
+    }
+
+    void changingToMissingFolderFails()
+    {
+        TestEnv t;
+        QCOMPARE(t.app->changeStorageDir(t.dir.filePath("does-not-exist")), AppController::FolderError);
+        QVERIFY(!t.app->errorMessage().isEmpty());
+        QCOMPARE(t.app->storagePath(), t.dir.filePath("todos.json"));
+        t.app->clearError();
+        QVERIFY(t.app->errorMessage().isEmpty());
+    }
+
+    void unreadableFileIsKeptAside()
+    {
+        TestEnv t;
+        t.app.reset();
+        QFile file(t.dir.filePath("todos.json"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write("garbage");
+        file.close();
+        t.open();
+        QVERIFY(!t.app->errorMessage().isEmpty());
+        QVERIFY(t.shown().isEmpty());
+        QCOMPARE(QDir(t.dir.path()).entryList({"todos.json.unreadable-*"}).size(), 1);
+    }
+
+    // --- tasks ---
+
+    void newTaskGoesOnTopWithTitleAndDescription()
+    {
+        TestEnv t;
+        t.add("Old");
+        QVERIFY(t.app->addTask("Call mum\nabout Sunday\nand the cake"));
+        QCOMPARE(t.shown(), QStringList({"Call mum", "Old"}));
+        const Task task = t.store()->tasks().at(0);
+        QCOMPARE(task.title, QString("Call mum"));
+        QCOMPARE(task.description, QString("about Sunday\nand the cake"));
+        QVERIFY(!t.app->addTask("  \n "));
+        QCOMPARE(t.store()->tasks().size(), 2);
+    }
+
+    void listShowsTitlesAndCardDataHasTheRest()
+    {
+        TestEnv t;
+        const QString work = t.store()->addLabel("Work", 5);
+        const QString id = t.add("Title", "The description");
+        t.store()->setTaskLabels(id, {work});
+        TaskListModel *model = t.list();
+        QCOMPARE(model->data(model->index(0), TaskListModel::TitleRole).toString(), QString("Title"));
+        QCOMPARE(model->data(model->index(0), TaskListModel::LabelColorsRole).toStringList().size(), 1);
+
+        const QVariantMap card = t.app->task(id);
+        QCOMPARE(card.value("title").toString(), QString("Title"));
+        QCOMPARE(card.value("description").toString(), QString("The description"));
+        QCOMPARE(card.value("state").toString(), QString("active"));
+        QCOMPARE(card.value("labelIds").toStringList(), QStringList({work}));
+        QVERIFY(t.app->task("missing").isEmpty());
+    }
+
+    void updateTask()
+    {
+        TestEnv t;
+        const QString work = t.store()->addLabel("Work", 0);
+        const QString id = t.add("Title", "old");
+        QVERIFY(t.app->updateTask(id, "New title", "new description", {work}));
+        QCOMPARE(t.store()->task(id)->title, QString("New title"));
+        QCOMPARE(t.store()->task(id)->description, QString("new description"));
+        QCOMPARE(t.store()->task(id)->labelIds, QStringList({work}));
+        QCOMPARE(t.savedTitles(), QStringList({"New title"}));
+        QVERIFY(!t.app->updateTask(id, "  ", "x", {})); // a task needs a title
+        QCOMPARE(t.store()->task(id)->title, QString("New title"));
+    }
+
+    void tabsShowTasksByState()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        const QString c = t.add("C");
+        t.add("D");
+        t.app->complete({a});
+        t.app->cancel({b});
+        t.app->postponeUntil({c}, fixedNow.addDays(2));
+
+        QCOMPARE(t.shown(), QStringList({"D"}));
+        QCOMPARE(t.shown(TaskState::Completed), QStringList({"A"}));
+        QCOMPARE(t.shown(TaskState::Cancelled), QStringList({"B"}));
+        QCOMPARE(t.shown(TaskState::Postponed), QStringList({"C"}));
+        QVERIFY(!t.list(TaskState::Postponed)->data(t.list(TaskState::Postponed)->index(0), TaskListModel::PostponedTextRole).toString().isEmpty());
+        QCOMPARE(t.list()->totalCount(), 1);
+        QCOMPARE(t.app->currentModel(), t.list());
+        t.app->setCurrentTab(AppController::CompletedTab);
+        QCOMPARE(t.app->currentModel(), t.list(TaskState::Completed));
+    }
+
+    // --- ticking and the toolbar actions ---
+
+    void actionsNeedTickedTasks()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        QVERIFY(!t.app->canComplete());
+        QVERIFY(!t.app->canDelete());
+        QSignalSpy spy(t.app.get(), &AppController::actionsChanged);
+        t.list()->setChecked(a, true);
+        QVERIFY(spy.count() > 0);
+        QVERIFY(t.app->canComplete());
+        QVERIFY(t.app->canCancel());
+        QVERIFY(t.app->canPostpone());
+        QVERIFY(t.app->canDelete());
+        QVERIFY(!t.app->canRestore()); // already on the list
+        t.list()->setChecked(a, false);
+        QVERIFY(!t.app->canComplete());
+    }
+
+    void batchCompleteAndCancel()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        t.add("B");
+        const QString c = t.add("C");
+        const QString d = t.add("D");
+        t.list()->setChecked(a, true);
+        t.list()->setChecked(c, true);
+        t.app->completeChecked();
+        QCOMPARE(t.shown(), QStringList({"B", "D"}));
+        QCOMPARE(t.shown(TaskState::Completed), QStringList({"A", "C"}));
+        QCOMPARE(t.list()->checkedCount(), 0);
+
+        t.list()->checkAll();
+        t.app->cancelChecked();
+        QVERIFY(t.shown().isEmpty());
+        QCOMPARE(t.shown(TaskState::Cancelled), QStringList({"B", "D"}));
+        Q_UNUSED(d)
+    }
+
+    void batchDeleteNeedsConfirmation()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        t.add("C");
+        t.list()->setChecked(a, true);
+        t.list()->setChecked(b, true);
+
+        QSignalSpy spy(t.app.get(), &AppController::deleteConfirmationRequested);
+        t.app->deleteChecked();
+        QCOMPARE(spy.count(), 1);
+        QCOMPARE(spy.at(0).at(0).toInt(), 2);
+        QCOMPARE(t.shown(), QStringList({"A", "B", "C"})); // nothing deleted without the confirmation
+
+        t.app->confirmDelete();
+        QCOMPARE(t.shown(), QStringList({"C"}));
+        QCOMPARE(t.savedTitles(), QStringList({"C"})); // gone for good
+        for (TaskState state : {TaskState::Postponed, TaskState::Completed, TaskState::Cancelled}) {
+            QVERIFY(t.shown(state).isEmpty());
+        }
+    }
+
+    void singleDeleteIsImmediateAndPermanent()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        t.add("B");
+        t.list()->setChecked(a, true);
+        QSignalSpy spy(t.app.get(), &AppController::deleteConfirmationRequested);
+        t.app->deleteChecked();
+        QCOMPARE(spy.count(), 0);
+        QCOMPARE(t.shown(), QStringList({"B"}));
+        QCOMPARE(t.savedTitles(), QStringList({"B"}));
+    }
+
+    void restoreFromOtherTabs()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        const QString c = t.add("C");
+        t.app->cancel({a});
+        t.app->complete({b});
+        t.app->postponeUntil({c}, fixedNow.addDays(5));
+
+        const QList<QPair<int, QString>> tabs = {{AppController::CancelledTab, a}, {AppController::CompletedTab, b}, {AppController::PostponedTab, c}};
+        for (const auto &tab : tabs) {
+            t.app->setCurrentTab(tab.first);
+            t.app->currentModel()->setChecked(tab.second, true);
+            QVERIFY(t.app->canRestore());
+            t.app->restoreChecked();
+        }
+        QCOMPARE(t.shown(), QStringList({"A", "B", "C"}));
+        QVERIFY(!t.app->canCancel()); // nothing ticked on the cancelled tab
+    }
+
+    void selectAllTicksTheCurrentTabOnly()
+    {
+        TestEnv t;
+        t.add("A");
+        t.add("B");
+        const QString done = t.add("Done");
+        t.app->complete({done});
+        t.app->currentModel()->checkAll();
+        QCOMPARE(t.list()->checkedCount(), 2);
+        QCOMPARE(t.list(TaskState::Completed)->checkedCount(), 0);
+    }
+
+    // --- postponing ---
+
+    void postponeWithPresetHidesTaskUntilDue()
+    {
+        TestEnv t;
+        const QString later = t.add("Later");
+        t.add("Now");
+        t.list()->setChecked(later, true);
+        t.app->postponeChecked(AppController::ThreeDays);
+
+        QCOMPARE(t.shown(), QStringList({"Now"}));
+        QCOMPARE(t.shown(TaskState::Postponed), QStringList({"Later"}));
+        QCOMPARE(t.store()->task(later)->postponedUntil, QDate(2026, 11, 15).startOfDay());
+
+        t.now = QDateTime(QDate(2026, 11, 14), QTime(23, 0)); // opened too early: still hidden
+        t.open();
+        QCOMPARE(t.shown(), QStringList({"Now"}));
+        QCOMPARE(t.shown(TaskState::Postponed), QStringList({"Later"}));
+
+        t.now = QDateTime(QDate(2026, 11, 15), QTime(8, 0)); // opened once the time has come
+        t.open();
+        QCOMPARE(t.shown(), QStringList({"Later", "Now"}));
+        QVERIFY(t.shown(TaskState::Postponed).isEmpty());
+        QCOMPARE(t.savedTitles().size(), 2);
+    }
+
+    void postponePresetsAndCustomTime()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        const QString c = t.add("C");
+        const QString d = t.add("D");
+        const QString e = t.add("E");
+        t.app->postpone({a}, AppController::Tomorrow);
+        t.app->postpone({b}, AppController::OneWeek);
+        t.app->postpone({c}, AppController::OneMonth);
+        QCOMPARE(t.store()->task(a)->postponedUntil, QDate(2026, 11, 13).startOfDay());
+        QCOMPARE(t.store()->task(b)->postponedUntil, QDate(2026, 11, 19).startOfDay());
+        QCOMPARE(t.store()->task(c)->postponedUntil, QDate(2026, 12, 12).startOfDay());
+
+        const QDateTime custom(QDate(2026, 12, 24), QTime(18, 0));
+        t.list()->setChecked(d, true);
+        t.app->postponeCheckedUntil(custom);
+        QCOMPARE(t.store()->task(d)->postponedUntil, custom);
+        t.app->postponeUntil({e}, QDateTime()); // no time: nothing happens
+        QCOMPARE(t.store()->task(e)->state, TaskState::Active);
+        QCOMPARE(t.app->suggestedPostponeTime(), fixedNow.addDays(1));
+    }
+
+    // --- highlight ---
+
+    void highlightMovesWithArrowsAndCanBeCleared()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        const QString c = t.add("C");
+        TaskListModel *list = t.list();
+        QVERIFY(list->currentId().isEmpty());
+        list->moveHighlight(1); // nothing highlighted: starts at the top
+        QCOMPARE(list->currentId(), a);
+        list->moveHighlight(1);
+        QCOMPARE(list->currentId(), b);
+        list->moveHighlight(1);
+        list->moveHighlight(1); // stays on the last task
+        QCOMPARE(list->currentId(), c);
+        list->moveHighlight(-1);
+        QCOMPARE(list->currentId(), b);
+        list->setCurrentId(QString()); // Escape
+        QVERIFY(list->currentId().isEmpty());
+        list->moveHighlight(-1); // starts at the bottom
+        QCOMPARE(list->currentId(), c);
+        list->setCurrentId("missing");
+        QVERIFY(list->currentId().isEmpty());
+    }
+
+    void highlightIsDroppedWhenTheTaskLeavesTheList()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        t.list()->setCurrentId(a);
+        t.app->complete({a});
+        QVERIFY(t.list()->currentId().isEmpty());
+    }
+
+    void selectedMeansTickedOrElseHighlighted()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        QVERIFY(t.list()->selectedIds().isEmpty());
+        t.list()->setCurrentId(a);
+        QCOMPARE(t.list()->selectedIds(), QStringList({a}));
+        t.list()->setChecked(b, true);
+        QCOMPARE(t.list()->selectedIds(), QStringList({b}));
+    }
+
+    // --- keyboard actions ---
+
+    void deleteKeyCancelsSelectedTasks()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        const QString c = t.add("C");
+        t.app->cancelSelected(); // nothing selected
+        QCOMPARE(t.shown().size(), 3);
+
+        t.list()->setCurrentId(a); // highlighted only
+        t.app->cancelSelected();
+        QCOMPARE(t.store()->task(a)->state, TaskState::Cancelled);
+
+        t.list()->setChecked(b, true);
+        t.list()->setChecked(c, true);
+        t.app->cancelSelected();
+        QVERIFY(t.shown().isEmpty());
+        QCOMPARE(t.shown(TaskState::Cancelled), QStringList({"A", "B", "C"}));
+        QCOMPARE(t.savedTitles().size(), 3); // cancelled, not deleted
+    }
+
+    void duplicateSelectedTasks()
+    {
+        TestEnv t;
+        const QString work = t.store()->addLabel("Work", 0);
+        const QString a = t.add("A", "desc");
+        const QString b = t.add("B");
+        t.add("C");
+        t.store()->setTaskLabels(a, {work});
+        QVERIFY(!t.app->duplicateSelected()); // nothing selected
+
+        t.list()->setCurrentId(b); // highlighted only
+        QVERIFY(t.app->duplicateSelected());
+        QCOMPARE(t.shown(), QStringList({"A", "B", "C", "B"}));
+
+        t.list()->setChecked(a, true);
+        t.list()->setChecked(b, true);
+        QVERIFY(t.app->duplicateSelected());
+        QCOMPARE(t.shown(), QStringList({"A", "B", "C", "B", "A", "B"})); // copies at the bottom
+        const Task copy = t.store()->tasks().at(4);
+        QCOMPARE(copy.description, QString("desc"));
+        QCOMPARE(copy.labelIds, QStringList({work}));
+        QCOMPARE(t.savedTitles().size(), 6);
+    }
+
+    void copyAndPasteDuplicatesTasks()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        t.add("B");
+        QVERIFY(!t.app->copySelected()); // nothing selected
+        QVERIFY(!t.app->pasteTasks());
+
+        t.list()->setCurrentId(a);
+        QVERIFY(t.app->copySelected());
+        QCOMPARE(QGuiApplication::clipboard()->text(), QString("A"));
+        QVERIFY(t.app->pasteTasks());
+        QVERIFY(t.app->pasteTasks()); // can be pasted again
+        QCOMPARE(t.shown(), QStringList({"A", "B", "A", "A"}));
+
+        // Text copied elsewhere afterwards is not a task copy.
+        QGuiApplication::clipboard()->setText("something else");
+        QVERIFY(!t.app->pasteTasks());
+        QCOMPARE(t.shown().size(), 4);
+    }
+
+    // --- reordering ---
+
+    void reorder()
+    {
+        TestEnv t;
+        t.add("A");
+        t.add("B");
+        const QString c = t.add("C");
+        TaskListModel *list = t.list();
+        QSignalSpy moved(list, &QAbstractItemModel::rowsMoved);
+        QVERIFY(list->moveTask(2, 0)); // drag & drop
+        QCOMPARE(moved.count(), 1);
+        QCOMPARE(t.shown(), QStringList({"C", "A", "B"}));
+        QCOMPARE(t.savedTitles(), QStringList({"C", "A", "B"}));
+
+        list->setCurrentId(c); // Ctrl+Down / Ctrl+Up
+        QVERIFY(list->moveCurrent(1));
+        QCOMPARE(t.shown(), QStringList({"A", "C", "B"}));
+        QCOMPARE(list->currentId(), c); // the moved task stays highlighted
+        QVERIFY(list->moveCurrent(-1));
+        QVERIFY(!list->moveCurrent(-1)); // already first
+        QCOMPARE(t.shown(), QStringList({"C", "A", "B"}));
+        QVERIFY(!list->moveTask(0, 5));
+
+        t.open();
+        QCOMPARE(t.shown(), QStringList({"C", "A", "B"}));
+    }
+
+    void onlyTheActiveListCanBeReordered()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        t.app->complete({a, b});
+        QVERIFY(!t.list(TaskState::Completed)->moveTask(0, 1));
+        QCOMPARE(t.shown(TaskState::Completed), QStringList({"A", "B"}));
+    }
+
+    // --- labels ---
+
+    void labelsHaveNameAndOneOfTwelveColors()
+    {
+        TestEnv t;
+        QCOMPARE(t.app->palette().size(), 12);
+        QVERIFY(t.app->addLabel("Work", 4));
+        QVERIFY(!t.app->addLabel("", 1));
+        QVERIFY(!t.app->addLabel("Other", 12));
+        const QVariantList labels = t.app->labels();
+        QCOMPARE(labels.size(), 1);
+        const QVariantMap label = labels.at(0).toMap();
+        QCOMPARE(label.value("name").toString(), QString("Work"));
+        QCOMPARE(label.value("colorIndex").toInt(), 4);
+        QCOMPARE(label.value("color").toString(), t.app->palette().at(4));
+
+        const QString id = label.value("id").toString();
+        QVERIFY(t.app->updateLabel(id, "Job", 9));
+        QCOMPARE(t.app->labels().at(0).toMap().value("name").toString(), QString("Job"));
+        t.open(); // labels live in the todo file
+        QCOMPARE(t.app->labels().at(0).toMap().value("colorIndex").toInt(), 9);
+        QVERIFY(t.app->removeLabel(id));
+        QVERIFY(t.app->labels().isEmpty());
+    }
+
+    void filterByLabels()
+    {
+        TestEnv t;
+        const QString work = t.store()->addLabel("Work", 0);
+        const QString home = t.store()->addLabel("Home", 1);
+        t.store()->setTaskLabels(t.add("W"), {work});
+        t.store()->setTaskLabels(t.add("H"), {home});
+        t.store()->setTaskLabels(t.add("WH"), {work, home});
+        t.add("None");
+        const QString done = t.add("Done work");
+        t.store()->setTaskLabels(done, {work});
+        t.app->complete({done});
+
+        t.app->labelClicked(work);
+        QCOMPARE(t.shown(), QStringList({"W", "WH"}));
+        QCOMPARE(t.shown(TaskState::Completed), QStringList({"Done work"}));
+        QCOMPARE(t.app->labels().at(0).toMap().value("filtering").toBool(), true);
+        QCOMPARE(t.list()->totalCount(), 4); // the tab count ignores the filter
+
+        t.app->labelClicked(home); // any of the selected labels
+        QCOMPARE(t.shown(), QStringList({"W", "H", "WH"}));
+        t.app->labelClicked(work);
+        QCOMPARE(t.shown(), QStringList({"H", "WH"}));
+        QVERIFY(t.shown(TaskState::Completed).isEmpty());
+        t.app->labelClicked(home);
+        QCOMPARE(t.shown().size(), 4);
+    }
+
+    void deletingLabelRemovesItsFilter()
+    {
+        TestEnv t;
+        const QString work = t.store()->addLabel("Work", 0);
+        t.store()->setTaskLabels(t.add("W"), {work});
+        t.add("None");
+        t.app->labelClicked(work);
+        QCOMPARE(t.shown(), QStringList({"W"}));
+        t.app->removeLabel(work);
+        QVERIFY(t.app->labelFilter().isEmpty());
+        QCOMPARE(t.shown(), QStringList({"W", "None"}));
+    }
+
+    void clickingLabelTogglesItOnTickedTasks()
+    {
+        TestEnv t;
+        const QString work = t.store()->addLabel("Work", 0);
+        const QString home = t.store()->addLabel("Home", 1);
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        const QString c = t.add("C");
+        t.store()->setTaskLabels(a, {work});
+        t.list()->setChecked(a, true);
+        t.list()->setChecked(b, true);
+
+        t.app->labelClicked(work); // not all have it: added to those missing it
+        QCOMPARE(t.store()->task(a)->labelIds, QStringList({work}));
+        QCOMPARE(t.store()->task(b)->labelIds, QStringList({work}));
+        QVERIFY(t.store()->task(c)->labelIds.isEmpty());
+        QCOMPARE(t.list()->checkedCount(), 2); // the ticks are kept
+        QVERIFY(t.app->labelFilter().isEmpty()); // and nothing is filtered
+        QCOMPARE(t.shown().size(), 3);
+
+        t.app->labelClicked(home);
+        QCOMPARE(t.store()->task(a)->labelIds, QStringList({work, home}));
+        t.app->labelClicked(work); // all have it: removed
+        QCOMPARE(t.store()->task(a)->labelIds, QStringList({home}));
+        QCOMPARE(t.store()->task(b)->labelIds, QStringList({home}));
+    }
+};
+
+QTEST_MAIN(TestController)
+#include "test_controller.moc"

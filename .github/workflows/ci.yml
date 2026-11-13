@@ -13,7 +13,9 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  # The tests need neither a display nor a GPU.
   QT_QPA_PLATFORM: offscreen
+  QT_QUICK_BACKEND: software
 
 jobs:
   format:
@@ -22,11 +24,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install tools
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-format shellcheck desktop-file-utils
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends clang-format shellcheck desktop-file-utils qtdeclarative5-dev-tools
       - name: Check formatting
         run: >-
           find src tests -name '*.cpp' -o -name '*.h'
           | xargs clang-format --dry-run --Werror
+      - name: Check QML syntax
+        run: /usr/lib/qt5/bin/qmllint src/qml/*.qml
       - name: Check shell scripts
         run: shellcheck -x -P SCRIPTDIR scripts/*.sh scripts/lib/*.sh packaging/appimage/*.sh
       - name: Validate desktop file
@@ -121,7 +125,7 @@ jobs:
             -DKDETODO_VERSION="${{ steps.version.outputs.base }}"
           cmake --build build
           strip build/bin/kdetodo
-          build/bin/kdetodo --version
+          QT_QPA_PLATFORM=offscreen build/bin/kdetodo --version
       - uses: actions/upload-artifact@v4
         with:
           name: kdetodo-bin

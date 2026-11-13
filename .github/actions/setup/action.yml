@@ -14,9 +14,12 @@ runs:
       shell: bash
       env:
         PACKAGES: >-
-          build-essential cmake ninja-build extra-cmake-modules qtbase5-dev
+          build-essential cmake ninja-build extra-cmake-modules
+          qtbase5-dev qtdeclarative5-dev qtquickcontrols2-5-dev
           libkf5coreaddons-dev libkf5i18n-dev libkf5config-dev
-          libkf5widgetsaddons-dev libkf5xmlgui-dev
+          qml-module-qtquick2 qml-module-qtquick-window2 qml-module-qtquick-controls2
+          qml-module-qtquick-templates2 qml-module-qtquick-layouts qml-module-qt-labs-platform
+          qml-module-org-kde-kirigami2 qml-module-org-kde-qqc2desktopstyle
           ${{ inputs.extra-packages }}
       run: |
         # rebuilding the manual page index after every install is slow and useless here

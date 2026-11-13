@@ -1,25 +1,30 @@
 # todo-ubuntu-kde
 
-A simple todo list for KDE Plasma 5 (Qt 5 Widgets + KDE Frameworks 5).
+A simple todo list for KDE Plasma 5 (Qt Quick + Kirigami, KDE Frameworks 5).
 Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
 (your home directory by default; change it with the *Storage folder…* button).
 
 ## Using it
 
 - **Add a task** – type into the input above the list and press `Enter`;
-  the new task appears on top.
-  `Shift+Enter` starts the description on the next line.
-- **Task card** – click a task title to see and edit title, description and labels,
-  or to complete, postpone or cancel the task.
-- **Select** – tick the checkbox of one or more tasks (`Ctrl+A` selects all), then use the toolbar:
+  the new task appears on top. `Shift+Enter` starts the description on the next line.
+- **Highlight** – one click highlights a task; `Up` / `Down` move the highlight, `Esc` removes it.
+- **Task card** – double-click a task (or press `Enter` on the highlighted one) to see and edit
+  title, description and labels, or to complete, postpone or cancel the task.
+- **Quick complete** – hover a task and click the green checkmark at the end of its line.
+- **Select** – tick the checkbox of one or more tasks (`Ctrl+A` ticks all), then use the toolbar:
   *Complete*, *Cancel task*, *Postpone*, *Restore*, *Delete*.
   Deleting several tasks at once asks for confirmation; deletion is permanent.
+- **Keyboard** – on the ticked tasks, or else the highlighted one: `Delete` cancels,
+  `Ctrl+D` (or `Ctrl+C` then `Ctrl+V`) duplicates; copies go to the bottom of the list.
+  While you are typing a task, these keys edit the text instead.
 - **Postpone** – until tomorrow, 3 days, 1 week, 1 month or a custom date and time.
   Postponed tasks return to the list when the app is opened after that time.
 - **Tabs** – *Tasks*, *Postponed*, *Completed*, *Cancelled*.
-- **Reorder** – drag tasks, or `Ctrl+Up` / `Ctrl+Down`.
-- **Labels** – the *Labels…* button defines labels (name + one of 12 colors);
-  assign them in the task card, or tick tasks and click a label button above the list; filter with the label buttons above the list
+- **Reorder** – drag a task by its handle, or `Ctrl+Up` / `Ctrl+Down` on the highlighted task.
+- **Labels** – the *Labels…* button defines labels (name + one of 12 colors).
+  Assign them in the task card, or tick tasks and click a label above the list.
+  With nothing ticked, clicking a label filters the lists
   (a task is shown if it has any of the selected labels).
 
 ## Install
@@ -34,8 +39,12 @@ Releases are on the [Releases](https://github.com/anjankow/todo-ubuntu-kde/relea
 ## Build
 
 ```bash
-sudo apt install build-essential cmake ninja-build extra-cmake-modules qtbase5-dev \
-    libkf5coreaddons-dev libkf5i18n-dev libkf5config-dev libkf5widgetsaddons-dev libkf5xmlgui-dev
+sudo apt install build-essential cmake ninja-build extra-cmake-modules \
+    qtbase5-dev qtdeclarative5-dev qtquickcontrols2-5-dev \
+    libkf5coreaddons-dev libkf5i18n-dev libkf5config-dev \
+    qml-module-qtquick2 qml-module-qtquick-window2 qml-module-qtquick-controls2 \
+    qml-module-qtquick-templates2 qml-module-qtquick-layouts qml-module-qt-labs-platform \
+    qml-module-org-kde-kirigami2 qml-module-org-kde-qqc2desktopstyle
 ```
 
 ```bash
@@ -47,7 +56,7 @@ cmake --build build
 ```
 
 ```bash
-QT_QPA_PLATFORM=offscreen ctest --test-dir build --output-on-failure
+QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software ctest --test-dir build --output-on-failure
 ```
 
 ```bash
