@@ -34,6 +34,12 @@ of the Tasks list (each can be completed with its checkmark) and an *Open Todo* 
 Closing the window keeps the app running in the tray; quit with `Ctrl+Q` or *Quit* in the
 icon's context menu. Only one instance runs: starting the app again brings its window to the front.
 
+## Terminal output
+
+Started from a terminal, the app prints only its own critical errors. Debug and warning lines of the
+Qt and KDE libraries are dropped; set `QT_LOGGING_RULES` (for example `QT_LOGGING_RULES='*.debug=true'`)
+to see all of them again.
+
 ## Keyboard shortcuts
 
 The list is also in the app: *Settings* (the button at the right end of the toolbar) → *Keyboard shortcuts…*.

@@ -1,4 +1,5 @@
 add_library(kdetodocore STATIC
+    core/console.cpp
     core/palette.cpp
     core/postpone.cpp
     core/storage.cpp
