@@ -13,18 +13,30 @@
 
 namespace
 {
-QQuickItem *findItem(QQuickItem *parent, const QString &name)
+QQuickItem *findItem(QQuickItem *parent, const QString &name, bool visibleOnly)
 {
+    if (visibleOnly && !parent->isVisible()) {
+        return nullptr; // nothing below a hidden item is shown
+    }
     if (parent->objectName() == name) {
         return parent;
     }
     const QList<QQuickItem *> children = parent->childItems();
     for (QQuickItem *child : children) {
-        if (QQuickItem *found = findItem(child, name)) {
+        if (QQuickItem *found = findItem(child, name, visibleOnly)) {
             return found;
         }
     }
     return nullptr;
+}
+
+// The item the user sees under that name. A task has a row in the list of
+// its tab only, but a row of another tab may still be around, hidden, right
+// after the task changed its state: shown items win, hidden ones are a fallback.
+QQuickItem *findItem(QQuickItem *root, const QString &name)
+{
+    QQuickItem *shown = findItem(root, name, true);
+    return shown ? shown : findItem(root, name, false);
 }
 
 // The application window on a temporary folder, driven like a user would.
@@ -86,6 +98,7 @@ struct Ui : TestEnv {
         click(button);
         QTRY_VERIFY(object(menu)->property("opened").toBool());
         click(entry);
+        QTRY_VERIFY(!object(menu)->property("visible").toBool()); // closed again, clicks reach the window
     }
     void clickTask(const QString &taskId)
     {
@@ -622,11 +635,13 @@ private Q_SLOTS:
         QTRY_COMPARE(ui.store()->task(c)->state, TaskState::Postponed);
 
         ui.click("tab-cancelled");
-        QTRY_VERIFY(ui.row(b));
+        QTRY_COMPARE(ui.app->currentTab(), int(AppController::CancelledTab));
         ui.clickTask(b);
+        QVERIFY(ui.item("restoreButton")->isEnabled());
         ui.click("restoreButton");
         QCOMPARE(ui.store()->task(b)->state, TaskState::Active);
         ui.click("tab-active");
+        QTRY_COMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
         QTRY_VERIFY(ui.row(b));
         ui.clickTask(b);
         ui.click("deleteButton"); // one task: deleted at once
