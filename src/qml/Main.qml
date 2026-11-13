@@ -285,7 +285,7 @@ Kirigami.ApplicationWindow {
                     visible: app.currentTab === 0
                     wrapMode: TextEdit.Wrap
                     font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                    placeholderText: i18n("New task… (Enter saves, Shift+Enter adds a description)")
+                    placeholderText: i18n("New task (press Shift+Enter to focus)")
 
                     Keys.onPressed: {
                         var enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
