@@ -14,6 +14,18 @@
 
 namespace
 {
+QtMessageHandler g_defaultHandler = nullptr;
+QStringList g_qmlProblems;
+
+// Binding loops and other warnings of the application's own QML (qrc:/qml)
+// make the running test fail; those of the libraries are only printed.
+void collectQmlProblems(QtMsgType type, const QMessageLogContext &context, const QString &message)
+{
+    if (type != QtDebugMsg && type != QtInfoMsg && message.contains(QLatin1String("qrc:/qml/"))) {
+        g_qmlProblems.append(message);
+    }
+    g_defaultHandler(type, context, message);
+}
 QByteArray readFile(const QString &path)
 {
     QFile file(path);
@@ -166,7 +178,19 @@ class TestUi : public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
-    void initTestCase() { QStandardPaths::setTestModeEnabled(true); }
+    void initTestCase()
+    {
+        QStandardPaths::setTestModeEnabled(true);
+        // Here and not in main(): QtTest installs its own handler when it starts.
+        g_defaultHandler = qInstallMessageHandler(collectQmlProblems);
+    }
+    void init() { g_qmlProblems.clear(); }
+    void cleanup()
+    {
+        const QStringList problems = g_qmlProblems;
+        g_qmlProblems.clear();
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
+    }
 
     // --- creating tasks ---
 
