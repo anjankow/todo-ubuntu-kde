@@ -15,6 +15,33 @@ Kirigami.ApplicationWindow {
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
     pageStack.initialPage: mainPage
 
+    function showMainWindow() {
+        trayPopup.hide()
+        root.show()
+        root.raise()
+        root.requestActivate()
+    }
+
+    // With the tray icon the application keeps running without its window.
+    onClosing: {
+        if (app.keepRunningInTray) {
+            close.accepted = false
+            root.hide()
+        }
+    }
+
+    Shortcut {
+        sequence: StandardKey.Quit
+        context: Qt.ApplicationShortcut
+        onActivated: Qt.quit()
+    }
+
+    TrayPopup {
+        id: trayPopup
+        objectName: "trayPopup"
+        onOpenRequested: root.showMainWindow()
+    }
+
     function openCard(taskId) {
         if (taskId !== "") {
             taskCard.show(taskId)

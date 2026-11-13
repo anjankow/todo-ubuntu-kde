@@ -99,6 +99,24 @@ QVariantList AppController::labels() const
     return result;
 }
 
+QVariantList AppController::topTasks() const
+{
+    QVariantList result;
+    const QVector<Task> tasks = m_store->tasksIn(TaskState::Active); // not narrowed by the label filter
+    for (int i = 0; i < tasks.size() && i < topTaskCount; ++i) {
+        result.append(QVariantMap {{QStringLiteral("id"), tasks.at(i).id}, {QStringLiteral("title"), tasks.at(i).title}});
+    }
+    return result;
+}
+
+void AppController::setKeepRunningInTray(bool keep)
+{
+    if (keep != m_keepRunningInTray) {
+        m_keepRunningInTray = keep;
+        Q_EMIT keepRunningInTrayChanged();
+    }
+}
+
 QStringList AppController::palette() const
 {
     QStringList colors;
@@ -150,6 +168,7 @@ void AppController::onStoreChanged()
     m_filter.intersect(known); // a deleted label no longer filters
     applyFilter();
     Q_EMIT actionsChanged();
+    Q_EMIT topTasksChanged();
 }
 
 void AppController::applyFilter()

@@ -8,5 +8,6 @@
         <file>PostponeMenu.qml</file>
         <file>TaskCard.qml</file>
         <file>TaskList.qml</file>
+        <file>TrayPopup.qml</file>
     </qresource>
 </RCC>

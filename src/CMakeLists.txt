@@ -13,6 +13,7 @@ add_library(kdetodoapp STATIC
     app/application.cpp
     app/settings.cpp
     app/tasklistmodel.cpp
+    app/trayicon.cpp
     qml/qml.qrc
 )
 target_link_libraries(kdetodoapp PUBLIC
@@ -27,6 +28,6 @@ target_link_libraries(kdetodoapp PUBLIC
 )
 
 add_executable(kdetodo main.cpp)
-target_link_libraries(kdetodo PRIVATE kdetodoapp)
+target_link_libraries(kdetodo PRIVATE kdetodoapp KF5::DBusAddons)
 
 install(TARGETS kdetodo ${KDE_INSTALL_TARGETS_DEFAULT_ARGS})

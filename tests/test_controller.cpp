@@ -1,5 +1,7 @@
 #include "testenv.h"
 
+#include "app/trayicon.h"
+
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTest>
@@ -386,6 +388,57 @@ private Q_SLOTS:
         t.app->postponeUntil({e}, QDateTime()); // no time: nothing happens
         QCOMPARE(t.store()->task(e)->state, TaskState::Active);
         QCOMPARE(t.app->suggestedPostponeTime(), fixedNow.addDays(1));
+    }
+
+    // --- tray popup ---
+
+    void topTasksAreTheFirstFiveOfTheTasksList()
+    {
+        TestEnv t;
+        QVERIFY(t.app->topTasks().isEmpty());
+        const QString work = t.store()->addLabel("Work", 0);
+        QStringList ids;
+        for (const char *title : {"A", "B", "C", "D", "E", "F", "G"}) {
+            ids.append(t.add(title));
+        }
+        t.app->cancel({ids.at(1)}); // B is not on the Tasks list any more
+        QSignalSpy spy(t.app.get(), &AppController::topTasksChanged);
+
+        auto titles = [&t] {
+            QStringList result;
+            const QVariantList tasks = t.app->topTasks();
+            for (const QVariant &task : tasks) {
+                result.append(task.toMap().value("title").toString());
+            }
+            return result;
+        };
+        QCOMPARE(titles(), QStringList({"A", "C", "D", "E", "F"}));
+        QCOMPARE(t.app->topTasks().at(0).toMap().value("id").toString(), ids.at(0));
+
+        t.app->complete({ids.at(0)}); // completing one lets the next move up
+        QVERIFY(spy.count() > 0);
+        QCOMPARE(titles(), QStringList({"C", "D", "E", "F", "G"}));
+
+        t.app->labelClicked(work); // the label filter of the window does not matter
+        QVERIFY(t.shown().isEmpty());
+        QCOMPARE(titles().size(), 5);
+    }
+
+    void trayPopupOpensNextToTheIconInsideTheScreen()
+    {
+        const QRect screen(0, 0, 1920, 1080);
+        const QSize popup(300, 200);
+        // Panel at the bottom: above the icon, centred on it.
+        QCOMPARE(trayPopupPosition(QRect(1700, 1050, 24, 24), popup, screen), QPoint(1561, 846));
+        // Panel at the top: below the icon.
+        QCOMPARE(trayPopupPosition(QRect(1700, 4, 24, 24), popup, screen), QPoint(1561, 32));
+        // Icon in the corner: kept on the screen.
+        const QPoint corner = trayPopupPosition(QRect(1900, 1060, 20, 20), popup, screen);
+        QCOMPARE(corner.x(), 1620);
+        QVERIFY(QRect(corner, popup).bottom() < 1060);
+        QVERIFY(screen.contains(QRect(corner, popup)));
+        // Only the pointer position is known.
+        QVERIFY(screen.contains(QRect(trayPopupPosition(QRect(QPoint(5, 1075), QSize(1, 1)), popup, screen), popup)));
     }
 
     // --- highlight ---

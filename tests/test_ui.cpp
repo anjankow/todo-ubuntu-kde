@@ -806,6 +806,68 @@ private Q_SLOTS:
         QTRY_VERIFY(ui.isClosed("labelsDialog"));
     }
 
+    // --- tray popup ---
+
+    void trayPopupShowsFirstFiveTasksAndCompletesThem()
+    {
+        Ui ui;
+        QStringList ids;
+        for (const char *title : {"A", "B", "C", "D", "E", "F"}) {
+            ids.append(ui.add(title));
+        }
+        auto *popup = ui.window->findChild<QQuickWindow *>("trayPopup");
+        QVERIFY(popup);
+        QVERIFY(!popup->isVisible()); // only after a click on the tray icon
+        popup->show();
+        QVERIFY(QTest::qWaitForWindowExposed(popup));
+
+        for (int i = 0; i < 5; ++i) {
+            QQuickItem *title = findItem(popup->contentItem(), "trayTitle-" + ids.at(i));
+            QVERIFY(title);
+            QCOMPARE(title->property("text").toString(), ui.store()->task(ids.at(i))->title);
+        }
+        QVERIFY(!findItem(popup->contentItem(), "trayTitle-" + ids.at(5))); // the sixth is not shown
+        QVERIFY(!findItem(popup->contentItem(), "trayEmpty")->isVisible());
+
+        QQuickItem *complete = findItem(popup->contentItem(), "trayComplete-" + ids.at(0));
+        QVERIFY(complete);
+        QTest::qWait(30);
+        QTest::mouseClick(popup, Qt::LeftButton, Qt::NoModifier, Ui::center(complete));
+        QCOMPARE(ui.store()->task(ids.at(0))->state, TaskState::Completed);
+        QTRY_VERIFY(findItem(popup->contentItem(), "trayTitle-" + ids.at(5))); // the next one moved up
+        QVERIFY(!findItem(popup->contentItem(), "trayTitle-" + ids.at(0)));
+    }
+
+    void trayPopupOpensTheApplicationWindow()
+    {
+        Ui ui;
+        auto *popup = ui.window->findChild<QQuickWindow *>("trayPopup");
+        QVERIFY(popup);
+        ui.window->hide();
+        popup->show();
+        QVERIFY(QTest::qWaitForWindowExposed(popup));
+        QVERIFY(findItem(popup->contentItem(), "trayEmpty")->isVisible()); // no tasks yet
+        QQuickItem *open = findItem(popup->contentItem(), "trayOpen");
+        QVERIFY(open);
+        QTest::qWait(30);
+        QTest::mouseClick(popup, Qt::LeftButton, Qt::NoModifier, Ui::center(open));
+        QTRY_VERIFY(ui.window->isVisible());
+        QTRY_VERIFY(!popup->isVisible());
+    }
+
+    void closingTheWindowKeepsTheAppInTheTray()
+    {
+        Ui ui;
+        ui.add("A");
+        ui.app->setKeepRunningInTray(true);
+        ui.window->close();
+        QTRY_VERIFY(!ui.window->isVisible()); // hidden, not gone
+        QVERIFY(!ui.engine->rootObjects().isEmpty());
+        QMetaObject::invokeMethod(ui.window, "showMainWindow"); // what the tray and a second start do
+        QTRY_VERIFY(ui.window->isVisible());
+        QCOMPARE(ui.shown(), QStringList({"A"}));
+    }
+
     // --- window ---
 
     void toolbarButtonsAllFitInTheInitialWindow()

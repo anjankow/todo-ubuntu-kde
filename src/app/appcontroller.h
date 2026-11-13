@@ -28,6 +28,10 @@ class AppController : public QObject
     Q_PROPERTY(TaskListModel *currentModel READ currentModel NOTIFY currentTabChanged)
     Q_PROPERTY(QVariantList labels READ labels NOTIFY labelsChanged)
     Q_PROPERTY(QStringList palette READ palette CONSTANT)
+    // The first tasks of the Tasks list (id, title), for the tray popup.
+    Q_PROPERTY(QVariantList topTasks READ topTasks NOTIFY topTasksChanged)
+    // With a tray icon, closing the window only hides it.
+    Q_PROPERTY(bool keepRunningInTray READ keepRunningInTray WRITE setKeepRunningInTray NOTIFY keepRunningInTrayChanged)
     Q_PROPERTY(QString storageDir READ storageDir NOTIFY storageDirChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorChanged) // empty = none
     Q_PROPERTY(bool canComplete READ canComplete NOTIFY actionsChanged)
@@ -61,6 +65,10 @@ public:
     // One entry per label: id, name, color (#rrggbb), colorIndex, filtering.
     QVariantList labels() const;
     QStringList palette() const;
+    static constexpr int topTaskCount = 5;
+    QVariantList topTasks() const;
+    bool keepRunningInTray() const { return m_keepRunningInTray; }
+    void setKeepRunningInTray(bool keep);
     QSet<QString> labelFilter() const { return m_filter; }
 
     QString storageDir() const { return m_storageDir; }
@@ -117,6 +125,8 @@ public:
 Q_SIGNALS:
     void currentTabChanged();
     void labelsChanged();
+    void topTasksChanged();
+    void keepRunningInTrayChanged();
     void storageDirChanged();
     void actionsChanged();
     void deleteConfirmationRequested(int count);
@@ -139,4 +149,5 @@ private:
     QVector<TaskListModel *> m_models;
     QSet<QString> m_filter;
     QString m_error;
+    bool m_keepRunningInTray = false;
 };

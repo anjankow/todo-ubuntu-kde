@@ -23,7 +23,7 @@ option(KDETODO_WERROR "Treat compiler warnings as errors" OFF)
 option(KDETODO_SANITIZE "Build with address and undefined behaviour sanitizers" OFF)
 
 find_package(Qt5 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2 Test)
-find_package(KF5 ${KF5_MIN_VERSION} REQUIRED COMPONENTS CoreAddons I18n Config)
+find_package(KF5 ${KF5_MIN_VERSION} REQUIRED COMPONENTS CoreAddons I18n Config DBusAddons)
 
 set(CMAKE_AUTORCC ON)
 
