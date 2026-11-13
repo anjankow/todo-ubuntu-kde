@@ -35,7 +35,9 @@ Kirigami.ApplicationWindow {
         var list = app.currentModel
         switch (event.key) {
         case Qt.Key_Escape:
+            // Leaves the input (the keys then go to the task list) and drops the highlight.
             list.currentId = ""
+            listKeys.forceActiveFocus()
             return true
         case Qt.Key_Up:
             if (ctrl) {
@@ -68,10 +70,6 @@ Kirigami.ApplicationWindow {
                 list.checkAll()
             }
             return ctrl
-        case Qt.Key_C:
-            return ctrl && app.copySelected()
-        case Qt.Key_V:
-            return ctrl && app.pasteTasks()
         }
         return false
     }
@@ -101,14 +99,14 @@ Kirigami.ApplicationWindow {
                         text: i18n("Complete")
                         icon.name: "task-complete"
                         enabled: app.canComplete
-                        onClicked: app.completeChecked()
+                        onClicked: app.completeSelected()
                     }
                     ActionButton {
                         objectName: "cancelButton"
                         text: i18n("Cancel task")
                         icon.name: "dialog-cancel"
                         enabled: app.canCancel
-                        onClicked: app.cancelChecked()
+                        onClicked: app.cancelSelected()
                     }
                     ActionButton {
                         id: postponeButton
@@ -121,9 +119,9 @@ Kirigami.ApplicationWindow {
                         PostponeMenu {
                             id: postponeMenu
                             objectName: "postponeMenu"
-                            onPresetChosen: app.postponeChecked(preset)
+                            onPresetChosen: app.postponeSelected(preset)
                             onCustomChosen: postponeDialog.ask(function (until) {
-                                app.postponeCheckedUntil(until)
+                                app.postponeSelectedUntil(until)
                             })
                         }
                     }
@@ -132,14 +130,14 @@ Kirigami.ApplicationWindow {
                         text: i18n("Restore")
                         icon.name: "edit-undo"
                         enabled: app.canRestore
-                        onClicked: app.restoreChecked()
+                        onClicked: app.restoreSelected()
                     }
                     ActionButton {
                         objectName: "deleteButton"
                         text: i18n("Delete")
                         icon.name: "edit-delete"
                         enabled: app.canDelete
-                        onClicked: app.deleteChecked()
+                        onClicked: app.deleteSelected()
                     }
                     Item {
                         Layout.fillWidth: true
@@ -289,7 +287,6 @@ Kirigami.ApplicationWindow {
                         taskModel: app.activeModel
                         mainList: true
                         onOpenRequested: root.openCard(taskId)
-                        onRowClicked: newTask.forceActiveFocus()
                     }
                 }
                 TaskList {
@@ -310,10 +307,16 @@ Kirigami.ApplicationWindow {
             }
         }
 
-        // Keys when the input does not have the focus (other tabs).
-        Keys.onPressed: {
-            if (root.taskKey(event)) {
-                event.accepted = true
+        // Has the focus while the input does not (after Escape): the keys
+        // then go to the task list.
+        Item {
+            id: listKeys
+            objectName: "listKeys"
+
+            Keys.onPressed: {
+                if (root.taskKey(event)) {
+                    event.accepted = true
+                }
             }
         }
     }

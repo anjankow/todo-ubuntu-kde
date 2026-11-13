@@ -11,7 +11,6 @@ QQC2.ScrollView {
     property var taskModel
     property bool mainList: false // the Tasks tab: reordering and quick complete
     signal openRequested(string taskId)
-    signal rowClicked()
 
     ListView {
         id: list
@@ -54,7 +53,6 @@ QQC2.ScrollView {
                 hoverEnabled: true
                 onClicked: {
                     scroll.taskModel.currentId = model.taskId
-                    scroll.rowClicked()
                 }
                 onDoubleClicked: scroll.openRequested(model.taskId)
             }

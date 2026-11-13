@@ -92,23 +92,19 @@ public:
     Q_INVOKABLE void postponeUntil(const QStringList &ids, const QDateTime &until);
     Q_INVOKABLE QDateTime suggestedPostponeTime() const;
 
-    // --- toolbar: act on the ticked tasks of the current tab
-    Q_INVOKABLE void completeChecked();
-    Q_INVOKABLE void cancelChecked();
-    Q_INVOKABLE void restoreChecked();
-    Q_INVOKABLE void postponeChecked(AppController::Preset preset);
-    Q_INVOKABLE void postponeCheckedUntil(const QDateTime &until);
-    // Deletes one ticked task at once; for several it only asks for the
-    // confirmation (deleteConfirmationRequested), given with confirmDelete().
-    Q_INVOKABLE void deleteChecked();
-    Q_INVOKABLE void confirmDelete();
-
-    // --- keyboard: act on the ticked tasks, or else the highlighted one
+    // --- toolbar and keyboard: act on the selected tasks of the current
+    // tab, which are the ticked tasks or, when none is ticked, the
+    // highlighted one
+    Q_INVOKABLE void completeSelected();
     Q_INVOKABLE void cancelSelected();
+    Q_INVOKABLE void restoreSelected();
+    Q_INVOKABLE void postponeSelected(AppController::Preset preset);
+    Q_INVOKABLE void postponeSelectedUntil(const QDateTime &until);
+    // Deletes one selected task at once; for several it only asks for the
+    // confirmation (deleteConfirmationRequested), given with confirmDelete().
+    Q_INVOKABLE void deleteSelected();
+    Q_INVOKABLE void confirmDelete();
     Q_INVOKABLE bool duplicateSelected();
-    Q_INVOKABLE bool copySelected();
-    // Duplicates the copied tasks if they are still what the clipboard holds.
-    Q_INVOKABLE bool pasteTasks();
 
     // --- labels
     Q_INVOKABLE bool addLabel(const QString &name, int colorIndex);
@@ -131,6 +127,7 @@ private:
     void save();
     void onStoreChanged();
     void applyFilter();
+    bool hasSelection() const;
     void setError(const QString &message);
 
     Settings m_settings;
@@ -141,7 +138,5 @@ private:
     int m_currentTab = ActiveTab;
     QVector<TaskListModel *> m_models;
     QSet<QString> m_filter;
-    QStringList m_copiedIds;
-    QString m_copiedText;
     QString m_error;
 };

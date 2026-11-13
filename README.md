@@ -14,10 +14,8 @@ Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
 - **Quick complete** – hover a task and click the green checkmark at the end of its line.
 - **Select** – tick the checkbox of one or more tasks (`Ctrl+A` ticks all), then use the toolbar:
   *Complete*, *Cancel task*, *Postpone*, *Restore*, *Delete*.
+  With nothing ticked, the toolbar acts on the highlighted task.
   Deleting several tasks at once asks for confirmation; deletion is permanent.
-- **Keyboard** – on the ticked tasks, or else the highlighted one: `Delete` cancels,
-  `Ctrl+D` (or `Ctrl+C` then `Ctrl+V`) duplicates; copies go to the bottom of the list.
-  While you are typing a task, these keys edit the text instead.
 - **Postpone** – until tomorrow, 3 days, 1 week, 1 month or a custom date and time.
   Postponed tasks return to the list when the app is opened after that time.
 - **Tabs** – *Tasks*, *Postponed*, *Completed*, *Cancelled*.
@@ -26,6 +24,26 @@ Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
   Assign them in the task card, or tick tasks and click a label above the list.
   With nothing ticked, clicking a label filters the lists
   (a task is shown if it has any of the selected labels).
+
+## Keyboard shortcuts
+
+"Selected" means the ticked tasks or, when none is ticked, the highlighted task.
+
+| Key | Action |
+| --- | --- |
+| `Enter` | In the input: create the task. With an empty input (or outside it): open the card of the highlighted task |
+| `Shift+Enter` | In the input: new line (the description follows the title) |
+| `Esc` | Leave the input and remove the highlight |
+| `Up` / `Down` | Move the highlight |
+| `Ctrl+Up` / `Ctrl+Down` | Move the highlighted task up / down in the list |
+| `Ctrl+A` | Tick all tasks of the current tab |
+| `Ctrl+D` | Duplicate the selected tasks (copies go to the bottom of the Tasks list) |
+| `Delete` | Cancel the selected tasks |
+| `Enter` in the task card title | Save and close the card |
+
+While the input has the focus and contains text, `Up` / `Down`, `Ctrl+A`, `Ctrl+D` and `Delete`
+edit the text instead; press `Esc` first (the text stays as a draft) or finish the task with `Enter`.
+`Esc` and `Ctrl+Up` / `Ctrl+Down` always act on the task list. Click the input to type again.
 
 ## Install
 

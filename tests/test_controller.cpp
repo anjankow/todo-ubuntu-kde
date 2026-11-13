@@ -1,7 +1,5 @@
 #include "testenv.h"
 
-#include <QClipboard>
-#include <QGuiApplication>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTest>
@@ -192,7 +190,7 @@ private Q_SLOTS:
 
     // --- ticking and the toolbar actions ---
 
-    void actionsNeedTickedTasks()
+    void actionsNeedTickedOrHighlightedTasks()
     {
         TestEnv t;
         const QString a = t.add("A");
@@ -208,6 +206,46 @@ private Q_SLOTS:
         QVERIFY(!t.app->canRestore()); // already on the list
         t.list()->setChecked(a, false);
         QVERIFY(!t.app->canComplete());
+
+        spy.clear();
+        t.list()->setCurrentId(a); // highlighted is enough
+        QVERIFY(spy.count() > 0);
+        QVERIFY(t.app->canComplete());
+        QVERIFY(t.app->canDelete());
+        t.list()->setCurrentId(QString());
+        QVERIFY(!t.app->canComplete());
+    }
+
+    void actionsWorkOnTheHighlightedTask()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        const QString c = t.add("C");
+        const QString d = t.add("D");
+        t.list()->setCurrentId(a);
+        t.app->completeSelected();
+        QCOMPARE(t.store()->task(a)->state, TaskState::Completed);
+        t.list()->setCurrentId(b);
+        t.app->postponeSelected(AppController::Tomorrow);
+        QCOMPARE(t.store()->task(b)->state, TaskState::Postponed);
+        t.list()->setCurrentId(c);
+        t.app->deleteSelected(); // a single task: no confirmation
+        QVERIFY(!t.store()->task(c));
+
+        t.app->setCurrentTab(AppController::CompletedTab);
+        t.app->currentModel()->setCurrentId(a);
+        QVERIFY(t.app->canRestore());
+        t.app->restoreSelected();
+        QCOMPARE(t.shown(), QStringList({"A", "D"}));
+
+        // Ticked tasks win over the highlight.
+        t.app->setCurrentTab(AppController::ActiveTab);
+        t.list()->setCurrentId(a);
+        t.list()->setChecked(d, true);
+        t.app->cancelSelected();
+        QCOMPARE(t.store()->task(d)->state, TaskState::Cancelled);
+        QCOMPARE(t.store()->task(a)->state, TaskState::Active);
     }
 
     void batchCompleteAndCancel()
@@ -219,13 +257,13 @@ private Q_SLOTS:
         const QString d = t.add("D");
         t.list()->setChecked(a, true);
         t.list()->setChecked(c, true);
-        t.app->completeChecked();
+        t.app->completeSelected();
         QCOMPARE(t.shown(), QStringList({"B", "D"}));
         QCOMPARE(t.shown(TaskState::Completed), QStringList({"A", "C"}));
         QCOMPARE(t.list()->checkedCount(), 0);
 
         t.list()->checkAll();
-        t.app->cancelChecked();
+        t.app->cancelSelected();
         QVERIFY(t.shown().isEmpty());
         QCOMPARE(t.shown(TaskState::Cancelled), QStringList({"B", "D"}));
         Q_UNUSED(d)
@@ -241,7 +279,7 @@ private Q_SLOTS:
         t.list()->setChecked(b, true);
 
         QSignalSpy spy(t.app.get(), &AppController::deleteConfirmationRequested);
-        t.app->deleteChecked();
+        t.app->deleteSelected();
         QCOMPARE(spy.count(), 1);
         QCOMPARE(spy.at(0).at(0).toInt(), 2);
         QCOMPARE(t.shown(), QStringList({"A", "B", "C"})); // nothing deleted without the confirmation
@@ -261,7 +299,7 @@ private Q_SLOTS:
         t.add("B");
         t.list()->setChecked(a, true);
         QSignalSpy spy(t.app.get(), &AppController::deleteConfirmationRequested);
-        t.app->deleteChecked();
+        t.app->deleteSelected();
         QCOMPARE(spy.count(), 0);
         QCOMPARE(t.shown(), QStringList({"B"}));
         QCOMPARE(t.savedTitles(), QStringList({"B"}));
@@ -282,10 +320,10 @@ private Q_SLOTS:
             t.app->setCurrentTab(tab.first);
             t.app->currentModel()->setChecked(tab.second, true);
             QVERIFY(t.app->canRestore());
-            t.app->restoreChecked();
+            t.app->restoreSelected();
         }
         QCOMPARE(t.shown(), QStringList({"A", "B", "C"}));
-        QVERIFY(!t.app->canCancel()); // nothing ticked on the cancelled tab
+        QVERIFY(!t.app->canCancel()); // nothing selected any more
     }
 
     void selectAllTicksTheCurrentTabOnly()
@@ -308,7 +346,7 @@ private Q_SLOTS:
         const QString later = t.add("Later");
         t.add("Now");
         t.list()->setChecked(later, true);
-        t.app->postponeChecked(AppController::ThreeDays);
+        t.app->postponeSelected(AppController::ThreeDays);
 
         QCOMPARE(t.shown(), QStringList({"Now"}));
         QCOMPARE(t.shown(TaskState::Postponed), QStringList({"Later"}));
@@ -343,7 +381,7 @@ private Q_SLOTS:
 
         const QDateTime custom(QDate(2026, 12, 24), QTime(18, 0));
         t.list()->setChecked(d, true);
-        t.app->postponeCheckedUntil(custom);
+        t.app->postponeSelectedUntil(custom);
         QCOMPARE(t.store()->task(d)->postponedUntil, custom);
         t.app->postponeUntil({e}, QDateTime()); // no time: nothing happens
         QCOMPARE(t.store()->task(e)->state, TaskState::Active);
@@ -443,27 +481,6 @@ private Q_SLOTS:
         QCOMPARE(copy.description, QString("desc"));
         QCOMPARE(copy.labelIds, QStringList({work}));
         QCOMPARE(t.savedTitles().size(), 6);
-    }
-
-    void copyAndPasteDuplicatesTasks()
-    {
-        TestEnv t;
-        const QString a = t.add("A");
-        t.add("B");
-        QVERIFY(!t.app->copySelected()); // nothing selected
-        QVERIFY(!t.app->pasteTasks());
-
-        t.list()->setCurrentId(a);
-        QVERIFY(t.app->copySelected());
-        QCOMPARE(QGuiApplication::clipboard()->text(), QString("A"));
-        QVERIFY(t.app->pasteTasks());
-        QVERIFY(t.app->pasteTasks()); // can be pasted again
-        QCOMPARE(t.shown(), QStringList({"A", "B", "A", "A"}));
-
-        // Text copied elsewhere afterwards is not a task copy.
-        QGuiApplication::clipboard()->setText("something else");
-        QVERIFY(!t.app->pasteTasks());
-        QCOMPARE(t.shown().size(), 4);
     }
 
     // --- reordering ---

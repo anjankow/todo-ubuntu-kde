@@ -7,11 +7,9 @@
 
 #include <KLocalizedString>
 
-#include <QClipboard>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QGuiApplication>
 
 namespace
 {
@@ -59,6 +57,7 @@ AppController::AppController(const QString &configFile, Clock clock, QObject *pa
         auto *model = new TaskListModel(m_store, state, this);
         m_models.append(model);
         connect(model, &TaskListModel::checkedChanged, this, &AppController::actionsChanged);
+        connect(model, &TaskListModel::currentIdChanged, this, &AppController::actionsChanged);
     }
     m_storageDir = m_settings.storageDir();
     connect(m_store, &TodoStore::changed, this, &AppController::onStoreChanged);
@@ -214,29 +213,34 @@ void AppController::clearError()
     setError({});
 }
 
+bool AppController::hasSelection() const
+{
+    return !currentModel()->selectedIds().isEmpty();
+}
+
 bool AppController::canComplete() const
 {
-    return currentModel()->checkedCount() > 0 && m_currentTab != CompletedTab;
+    return hasSelection() && m_currentTab != CompletedTab;
 }
 
 bool AppController::canCancel() const
 {
-    return currentModel()->checkedCount() > 0 && m_currentTab != CancelledTab;
+    return hasSelection() && m_currentTab != CancelledTab;
 }
 
 bool AppController::canPostpone() const
 {
-    return currentModel()->checkedCount() > 0 && (m_currentTab == ActiveTab || m_currentTab == PostponedTab);
+    return hasSelection() && (m_currentTab == ActiveTab || m_currentTab == PostponedTab);
 }
 
 bool AppController::canRestore() const
 {
-    return currentModel()->checkedCount() > 0 && m_currentTab != ActiveTab;
+    return hasSelection() && m_currentTab != ActiveTab;
 }
 
 bool AppController::canDelete() const
 {
-    return currentModel()->checkedCount() > 0;
+    return hasSelection();
 }
 
 bool AppController::addTask(const QString &text)
@@ -290,44 +294,44 @@ QDateTime AppController::suggestedPostponeTime() const
     return m_clock().addDays(1);
 }
 
-void AppController::completeChecked()
+void AppController::completeSelected()
 {
     if (canComplete()) {
-        m_store->complete(currentModel()->checkedIds());
+        m_store->complete(currentModel()->selectedIds());
     }
 }
 
-void AppController::cancelChecked()
+void AppController::cancelSelected()
 {
     if (canCancel()) {
-        m_store->cancel(currentModel()->checkedIds());
+        m_store->cancel(currentModel()->selectedIds());
     }
 }
 
-void AppController::restoreChecked()
+void AppController::restoreSelected()
 {
     if (canRestore()) {
-        m_store->restore(currentModel()->checkedIds());
+        m_store->restore(currentModel()->selectedIds());
     }
 }
 
-void AppController::postponeChecked(Preset preset)
+void AppController::postponeSelected(Preset preset)
 {
     if (canPostpone()) {
-        postpone(currentModel()->checkedIds(), preset);
+        postpone(currentModel()->selectedIds(), preset);
     }
 }
 
-void AppController::postponeCheckedUntil(const QDateTime &until)
+void AppController::postponeSelectedUntil(const QDateTime &until)
 {
     if (canPostpone()) {
-        m_store->postpone(currentModel()->checkedIds(), until);
+        m_store->postpone(currentModel()->selectedIds(), until);
     }
 }
 
-void AppController::deleteChecked()
+void AppController::deleteSelected()
 {
-    const QStringList ids = currentModel()->checkedIds();
+    const QStringList ids = currentModel()->selectedIds();
     if (ids.size() > 1) {
         Q_EMIT deleteConfirmationRequested(ids.size()); // several at once need a confirmation
     } else {
@@ -337,44 +341,12 @@ void AppController::deleteChecked()
 
 void AppController::confirmDelete()
 {
-    m_store->remove(currentModel()->checkedIds());
-}
-
-void AppController::cancelSelected()
-{
-    if (m_currentTab != CancelledTab) {
-        m_store->cancel(currentModel()->selectedIds());
-    }
+    m_store->remove(currentModel()->selectedIds());
 }
 
 bool AppController::duplicateSelected()
 {
     return !m_store->duplicate(currentModel()->selectedIds()).isEmpty();
-}
-
-bool AppController::copySelected()
-{
-    const QStringList ids = currentModel()->selectedIds();
-    if (ids.isEmpty()) {
-        return false;
-    }
-    QStringList titles;
-    for (const QString &id : ids) {
-        titles.append(m_store->task(id)->title);
-    }
-    m_copiedIds = ids;
-    m_copiedText = titles.join(QLatin1Char('\n'));
-    QGuiApplication::clipboard()->setText(m_copiedText);
-    return true;
-}
-
-bool AppController::pasteTasks()
-{
-    // Something else copied since then is ordinary text for the input.
-    if (m_copiedIds.isEmpty() || QGuiApplication::clipboard()->text() != m_copiedText) {
-        return false;
-    }
-    return !m_store->duplicate(m_copiedIds).isEmpty();
 }
 
 bool AppController::addLabel(const QString &name, int colorIndex)

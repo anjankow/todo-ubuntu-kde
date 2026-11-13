@@ -277,10 +277,8 @@ private Q_SLOTS:
         QVERIFY(!ui.row(a)->property("highlighted").toBool());
 
         ui.clickTask(b);
-        ui.type("draft"); // Escape works while typing too, and keeps the text
-        ui.key(Qt::Key_Escape);
+        ui.key(Qt::Key_Escape); // also without the input having the focus
         QVERIFY(ui.highlighted().isEmpty());
-        QCOMPARE(ui.inputText(), QString("draft"));
     }
 
     void cardEditsTask()
@@ -558,22 +556,75 @@ private Q_SLOTS:
         QCOMPARE(ui.shown(), QStringList({"A", "B", "A", "A", "B"}));
     }
 
-    void ctrlCThenCtrlVDuplicates()
+    void ctrlCAndCtrlVDoNotDuplicate()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        ui.clickTask(a);
+        QGuiApplication::clipboard()->setText("from elsewhere");
+        ui.key(Qt::Key_C, Qt::ControlModifier);
+        ui.key(Qt::Key_V, Qt::ControlModifier); // an ordinary paste into the input
+        QCOMPARE(ui.shown(), QStringList({"A"}));
+        QCOMPARE(ui.inputText(), QString("from elsewhere"));
+    }
+
+    void escapeLeavesTheInputAndKeysGoToTheTasks()
     {
         Ui ui;
         const QString a = ui.add("A");
         ui.add("B");
-        ui.clickTask(a);
-        ui.key(Qt::Key_C, Qt::ControlModifier);
-        ui.key(Qt::Key_V, Qt::ControlModifier);
-        QCOMPARE(ui.shown(), QStringList({"A", "B", "A"}));
-        QVERIFY(ui.inputText().isEmpty()); // nothing was pasted as text
+        ui.type("draft");
+        QVERIFY(ui.input()->hasActiveFocus());
+        ui.key(Qt::Key_Escape);
+        QVERIFY(!ui.input()->hasActiveFocus());
+        QCOMPARE(ui.inputText(), QString("draft")); // the draft stays
 
-        // Other text on the clipboard is pasted into the input as usual.
-        QGuiApplication::clipboard()->setText("from elsewhere");
-        ui.key(Qt::Key_V, Qt::ControlModifier);
-        QCOMPARE(ui.shown().size(), 3);
-        QCOMPARE(ui.inputText(), QString("from elsewhere"));
+        ui.key(Qt::Key_X); // typing no longer reaches the input
+        QCOMPARE(ui.inputText(), QString("draft"));
+        ui.key(Qt::Key_Down); // the task keys work although a draft is there
+        QCOMPARE(ui.highlighted(), a);
+        ui.key(Qt::Key_D, Qt::ControlModifier);
+        QCOMPARE(ui.shown(), QStringList({"A", "B", "A"}));
+        ui.key(Qt::Key_Delete);
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Cancelled);
+        ui.key(Qt::Key_A, Qt::ControlModifier);
+        QCOMPARE(ui.list()->checkedCount(), 2);
+
+        ui.click("newTaskInput"); // a click brings the input back
+        QVERIFY(ui.input()->hasActiveFocus());
+    }
+
+    void toolbarActsOnTheHighlightedTask()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        const QString c = ui.add("C");
+        QVERIFY(!ui.item("completeButton")->isEnabled());
+        ui.clickTask(a);
+        QVERIFY(ui.item("completeButton")->isEnabled());
+        QVERIFY(ui.item("deleteButton")->isEnabled());
+        ui.click("completeButton");
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Completed);
+
+        ui.clickTask(b);
+        ui.click("cancelButton");
+        QCOMPARE(ui.store()->task(b)->state, TaskState::Cancelled);
+
+        ui.clickTask(c);
+        ui.pickFromMenu("postponeButton", "postponeMenu", "postponeOneWeek");
+        QTRY_COMPARE(ui.store()->task(c)->state, TaskState::Postponed);
+
+        ui.click("tab-cancelled");
+        QTRY_VERIFY(ui.row(b));
+        ui.clickTask(b);
+        ui.click("restoreButton");
+        QCOMPARE(ui.store()->task(b)->state, TaskState::Active);
+        ui.click("tab-active");
+        QTRY_VERIFY(ui.row(b));
+        ui.clickTask(b);
+        ui.click("deleteButton"); // one task: deleted at once
+        QVERIFY(!ui.store()->task(b));
     }
 
     void reorderWithCtrlArrows()
