@@ -171,6 +171,24 @@ void TaskListModel::checkAll()
     Q_EMIT checkedChanged();
 }
 
+void TaskListModel::toggleCurrentChecked()
+{
+    if (!m_currentId.isEmpty()) {
+        setChecked(m_currentId, !m_checked.contains(m_currentId));
+    }
+}
+
+void TaskListModel::extendSelection(int delta)
+{
+    if (!m_currentId.isEmpty()) {
+        setChecked(m_currentId, true);
+    }
+    moveHighlight(delta);
+    if (!m_currentId.isEmpty()) {
+        setChecked(m_currentId, true);
+    }
+}
+
 void TaskListModel::clearChecked()
 {
     if (m_checked.isEmpty()) {

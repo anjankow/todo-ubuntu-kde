@@ -101,10 +101,11 @@ QQC2.Dialog {
         RowLayout {
             spacing: Kirigami.Units.smallSpacing
 
-            QQC2.Button {
+            IconButton {
                 objectName: "cardComplete"
                 text: i18n("Complete")
-                icon.name: "task-complete"
+                icon.name: "checkmark"
+                icon.color: Kirigami.Theme.positiveTextColor
                 enabled: card.taskState !== "completed"
                 onClicked: {
                     if (card.save()) {
@@ -113,11 +114,11 @@ QQC2.Dialog {
                     }
                 }
             }
-            QQC2.Button {
+            IconButton {
                 id: cardPostponeButton
                 objectName: "cardPostpone"
                 text: i18n("Postpone")
-                icon.name: "chronometer"
+                icon.name: "view-calendar"
                 enabled: card.taskState === "active" || card.taskState === "postponed"
                 onClicked: cardPostponeMenu.popup(cardPostponeButton, 0, cardPostponeButton.height)
 
@@ -140,10 +141,10 @@ QQC2.Dialog {
                     }
                 }
             }
-            QQC2.Button {
+            IconButton {
                 objectName: "cardCancelTask"
                 text: i18n("Cancel task")
-                icon.name: "dialog-cancel"
+                icon.source: "qrc:/qml/icons/cancel.svg"
                 enabled: card.taskState !== "cancelled"
                 onClicked: {
                     if (card.save()) {

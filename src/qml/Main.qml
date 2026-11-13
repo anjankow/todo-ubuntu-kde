@@ -56,42 +56,73 @@ Kirigami.ApplicationWindow {
         }
     }
 
+    // Escape pressed twice in a row within this time unticks all tasks.
+    readonly property int doubleEscapeInterval: 500
+    property double lastEscape: 0
+
+    function focusList() {
+        listKeys.forceActiveFocus()
+    }
+
+    // Shift+Enter with nothing highlighted: the only key way into the input.
+    function focusInput() {
+        app.currentTab = 0 // the input is on the Tasks tab
+        newTask.forceActiveFocus()
+    }
+
     // Keys that act on the task list. Returns true when the key was used.
     function taskKey(event) {
         var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
+        var shift = (event.modifiers & Qt.ShiftModifier) !== 0
         var list = app.currentModel
         switch (event.key) {
         case Qt.Key_Escape:
+            var now = Date.now()
+            if (now - lastEscape <= doubleEscapeInterval) {
+                list.clearChecked()
+                lastEscape = 0
+            } else {
+                lastEscape = now
+            }
             // Leaves the input (the keys then go to the task list) and drops the highlight.
             list.currentId = ""
-            listKeys.forceActiveFocus()
+            focusList()
             return true
         case Qt.Key_Up:
-            if (ctrl) {
-                list.moveCurrent(-1)
-            } else {
-                list.moveHighlight(-1)
-            }
-            return true
         case Qt.Key_Down:
+            var delta = event.key === Qt.Key_Up ? -1 : 1
             if (ctrl) {
-                list.moveCurrent(1)
+                list.moveCurrent(delta)
+            } else if (shift) {
+                list.extendSelection(delta)
             } else {
-                list.moveHighlight(1)
+                list.moveHighlight(delta)
             }
+            focusList()
             return true
         case Qt.Key_Return:
         case Qt.Key_Enter:
-            if (list.currentId === "") {
-                return false
+            if (list.currentId !== "") {
+                openCard(list.currentId)
+            } else if (shift) {
+                focusInput()
             }
-            openCard(list.currentId)
+            return true
+        case Qt.Key_Space:
+            list.toggleCurrentChecked()
             return true
         case Qt.Key_Delete:
-            app.cancelSelected()
+            if (shift) {
+                app.deleteSelected()
+            } else {
+                app.cancelSelected()
+            }
             return true
         case Qt.Key_D:
-            return ctrl && (app.duplicateSelected() || true)
+            if (ctrl) {
+                app.duplicateSelected()
+            }
+            return ctrl
         case Qt.Key_A:
             if (ctrl) {
                 list.checkAll()
@@ -121,25 +152,19 @@ Kirigami.ApplicationWindow {
                     anchors.fill: parent
                     spacing: Kirigami.Units.smallSpacing
 
-                    ActionButton {
+                    IconButton {
                         objectName: "completeButton"
                         text: i18n("Complete")
-                        icon.name: "task-complete"
+                        icon.name: "checkmark"
+                        icon.color: Kirigami.Theme.positiveTextColor
                         enabled: app.canComplete
                         onClicked: app.completeSelected()
                     }
-                    ActionButton {
-                        objectName: "cancelButton"
-                        text: i18n("Cancel task")
-                        icon.name: "dialog-cancel"
-                        enabled: app.canCancel
-                        onClicked: app.cancelSelected()
-                    }
-                    ActionButton {
+                    IconButton {
                         id: postponeButton
                         objectName: "postponeButton"
                         text: i18n("Postpone")
-                        icon.name: "chronometer"
+                        icon.name: "view-calendar"
                         enabled: app.canPostpone
                         onClicked: postponeMenu.popup(postponeButton, 0, postponeButton.height)
 
@@ -152,34 +177,60 @@ Kirigami.ApplicationWindow {
                             })
                         }
                     }
-                    ActionButton {
+                    IconButton {
+                        objectName: "cancelButton"
+                        text: i18n("Cancel task")
+                        icon.source: "qrc:/qml/icons/cancel.svg"
+                        enabled: app.canCancel
+                        onClicked: app.cancelSelected()
+                    }
+                    IconButton {
+                        objectName: "deleteButton"
+                        text: i18n("Delete")
+                        icon.source: "qrc:/qml/icons/delete.svg"
+                        enabled: app.canDelete
+                        onClicked: app.deleteSelected()
+                    }
+                    IconButton {
                         objectName: "restoreButton"
                         text: i18n("Restore")
                         icon.name: "edit-undo"
                         enabled: app.canRestore
                         onClicked: app.restoreSelected()
                     }
-                    ActionButton {
-                        objectName: "deleteButton"
-                        text: i18n("Delete")
-                        icon.name: "edit-delete"
-                        enabled: app.canDelete
-                        onClicked: app.deleteSelected()
-                    }
                     Item {
                         Layout.fillWidth: true
                     }
-                    ActionButton {
-                        objectName: "labelsButton"
-                        text: i18n("Labels…")
-                        icon.name: "tag"
-                        onClicked: labelsDialog.open()
-                    }
-                    ActionButton {
-                        objectName: "storageButton"
-                        text: i18n("Storage folder…")
-                        icon.name: "folder"
-                        onClicked: folderDialog.open()
+                    IconButton {
+                        id: settingsButton
+                        objectName: "settingsButton"
+                        text: i18n("Settings")
+                        icon.name: "configure"
+                        onClicked: settingsMenu.popup(settingsButton, 0, settingsButton.height)
+
+                        QQC2.Menu {
+                            id: settingsMenu
+                            objectName: "settingsMenu"
+
+                            QQC2.MenuItem {
+                                objectName: "settingsLabels"
+                                text: i18n("Labels…")
+                                icon.name: "tag"
+                                onTriggered: labelsDialog.open()
+                            }
+                            QQC2.MenuItem {
+                                objectName: "settingsStorage"
+                                text: i18n("Storage folder…")
+                                icon.name: "folder"
+                                onTriggered: folderDialog.open()
+                            }
+                            QQC2.MenuItem {
+                                objectName: "settingsShortcuts"
+                                text: i18n("Keyboard shortcuts…")
+                                icon.name: "input-keyboard"
+                                onTriggered: shortcutsDialog.open()
+                            }
+                        }
                     }
                 }
             }
@@ -271,10 +322,9 @@ Kirigami.ApplicationWindow {
                         id: newTask
                         objectName: "newTaskInput"
                         Layout.fillWidth: true
-                        focus: true
                         wrapMode: TextEdit.Wrap
                         font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                        placeholderText: i18n("New task… (Shift+Enter adds a description, Enter saves)")
+                        placeholderText: i18n("New task… (Enter saves, Shift+Enter adds a description)")
 
                         Keys.onPressed: {
                             var enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
@@ -282,18 +332,16 @@ Kirigami.ApplicationWindow {
                             if (enter && (event.modifiers & Qt.ShiftModifier)) {
                                 insert(cursorPosition, "\n") // the description starts on the next line
                                 event.accepted = true
-                            } else if (enter && text.trim() !== "") {
-                                app.addTask(text)
-                                clear()
-                                event.accepted = true
                             } else if (enter) {
+                                if (text.trim() !== "") {
+                                    app.addTask(text) // the input keeps the focus for the next task
+                                }
                                 clear()
-                                root.taskKey(event)
                                 event.accepted = true
                             } else if (event.key === Qt.Key_Escape
                                        || (ctrl && (event.key === Qt.Key_Up || event.key === Qt.Key_Down))
-                                       || text.length === 0) {
-                                // While nothing is typed, the keys belong to the task list.
+                                       || (text.length === 0 && (event.key === Qt.Key_Up || event.key === Qt.Key_Down))) {
+                                // These leave the input for the task list.
                                 if (root.taskKey(event)) {
                                     event.accepted = true
                                 }
@@ -314,28 +362,32 @@ Kirigami.ApplicationWindow {
                         taskModel: app.activeModel
                         mainList: true
                         onOpenRequested: root.openCard(taskId)
+                        onRowClicked: root.focusList()
                     }
                 }
                 TaskList {
                     objectName: "postponedList"
                     taskModel: app.postponedModel
                     onOpenRequested: root.openCard(taskId)
+                    onRowClicked: root.focusList()
                 }
                 TaskList {
                     objectName: "completedList"
                     taskModel: app.completedModel
                     onOpenRequested: root.openCard(taskId)
+                    onRowClicked: root.focusList()
                 }
                 TaskList {
                     objectName: "cancelledList"
                     taskModel: app.cancelledModel
                     onOpenRequested: root.openCard(taskId)
+                    onRowClicked: root.focusList()
                 }
             }
         }
 
-        // Has the focus while the input does not (after Escape): the keys
-        // then go to the task list.
+        // Has the keyboard focus whenever the input does not: the keys then
+        // go to the task list.
         Item {
             id: listKeys
             objectName: "listKeys"
@@ -352,7 +404,7 @@ Kirigami.ApplicationWindow {
         id: taskCard
         objectName: "taskCard"
         postponeDialog: postponeDialog
-        onClosed: newTask.forceActiveFocus()
+        onClosed: root.focusList()
     }
 
     PostponeDialog {
@@ -363,6 +415,13 @@ Kirigami.ApplicationWindow {
     LabelsDialog {
         id: labelsDialog
         objectName: "labelsDialog"
+        onClosed: root.focusList()
+    }
+
+    ShortcutsDialog {
+        id: shortcutsDialog
+        objectName: "shortcutsDialog"
+        onClosed: root.focusList()
     }
 
     QQC2.Dialog {
@@ -451,5 +510,6 @@ Kirigami.ApplicationWindow {
         onAccepted: root.chooseFolder(app.urlToPath(folder))
     }
 
-    Component.onCompleted: newTask.forceActiveFocus()
+    // At start nothing is highlighted and the keys go to the task list.
+    Component.onCompleted: focusList()
 }

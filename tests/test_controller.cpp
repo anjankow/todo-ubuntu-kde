@@ -477,6 +477,30 @@ private Q_SLOTS:
         QVERIFY(t.list()->currentId().isEmpty());
     }
 
+    void toggleAndExtendSelection()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        const QString c = t.add("C");
+        TaskListModel *list = t.list();
+        list->toggleCurrentChecked(); // nothing highlighted
+        QCOMPARE(list->checkedCount(), 0);
+        list->extendSelection(1); // starts at the top and ticks it
+        QCOMPARE(list->currentId(), a);
+        QCOMPARE(list->checkedIds(), QStringList({a}));
+        list->extendSelection(1);
+        QCOMPARE(list->checkedIds(), QStringList({a, b}));
+        list->extendSelection(-1); // never unticks
+        QCOMPARE(list->currentId(), a);
+        QCOMPARE(list->checkedIds(), QStringList({a, b}));
+        list->toggleCurrentChecked();
+        QCOMPARE(list->checkedIds(), QStringList({b}));
+        list->setCurrentId(c);
+        list->toggleCurrentChecked();
+        QCOMPARE(list->checkedIds(), QStringList({b, c}));
+    }
+
     void selectedMeansTickedOrElseHighlighted()
     {
         TestEnv t;

@@ -1,13 +1,16 @@
 <RCC>
     <qresource prefix="/qml">
         <file>Main.qml</file>
-        <file>ActionButton.qml</file>
+        <file>IconButton.qml</file>
         <file>LabelChip.qml</file>
         <file>LabelsDialog.qml</file>
         <file>PostponeDialog.qml</file>
         <file>PostponeMenu.qml</file>
+        <file>ShortcutsDialog.qml</file>
         <file>TaskCard.qml</file>
         <file>TaskList.qml</file>
         <file>TrayPopup.qml</file>
+        <file>icons/cancel.svg</file>
+        <file>icons/delete.svg</file>
     </qresource>
 </RCC>
