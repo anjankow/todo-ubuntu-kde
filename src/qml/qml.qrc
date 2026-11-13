@@ -1,0 +1,13 @@
+<RCC>
+    <qresource prefix="/qml">
+        <file>Main.qml</file>
+        <file>ActionButton.qml</file>
+        <file>LabelChip.qml</file>
+        <file>LabelsDialog.qml</file>
+        <file>PostponeDialog.qml</file>
+        <file>PostponeMenu.qml</file>
+        <file>TaskCard.qml</file>
+        <file>TaskList.qml</file>
+        <file>TrayPopup.qml</file>
+    </qresource>
+</RCC>

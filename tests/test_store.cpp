@@ -1,5 +1,6 @@
 #include "core/palette.h"
 #include "core/postpone.h"
+#include "core/taskinput.h"
 #include "core/todostore.h"
 
 #include <QSignalSpy>
@@ -50,6 +51,44 @@ private Q_SLOTS:
         store.addTask("B");
         store.addTask("Top", {}, true);
         QCOMPARE(titles(store.tasks()), QStringList({"Top", "A", "B"}));
+    }
+
+    void duplicateAppendsCopiesAtTheBottom()
+    {
+        TodoStore store;
+        const QString work = store.addLabel("Work", 0);
+        const QString a = store.addTask("A", "desc");
+        const QString b = store.addTask("B");
+        const QString c = store.addTask("C");
+        store.setTaskLabels(a, {work});
+        store.complete({c});
+
+        const QStringList copies = store.duplicate({c, a}); // copies keep the list order
+        QCOMPARE(copies.size(), 2);
+        QCOMPARE(titles(store.tasks()), QStringList({"A", "B", "C", "A", "C"}));
+        const Task *copyOfA = store.task(copies.at(0));
+        QVERIFY(copyOfA->id != a);
+        QCOMPARE(copyOfA->description, QString("desc"));
+        QCOMPARE(copyOfA->labelIds, QStringList({work}));
+        QCOMPARE(store.task(copies.at(1))->state, TaskState::Active); // a copy is a new, active task
+        QCOMPARE(store.task(c)->state, TaskState::Completed);
+        QVERIFY(store.duplicate({"missing"}).isEmpty());
+        Q_UNUSED(b)
+    }
+
+    void parseInput()
+    {
+        QString title;
+        QString description;
+        parseTaskInput("\n  Title \n\n desc \nmore\n", &title, &description);
+        QCOMPARE(title, QString("Title"));
+        QCOMPARE(description, QString("desc \nmore"));
+        parseTaskInput("Only title", &title, &description);
+        QCOMPARE(title, QString("Only title"));
+        QVERIFY(description.isEmpty());
+        parseTaskInput(" \n ", &title, &description);
+        QVERIFY(title.isEmpty());
+        QVERIFY(description.isEmpty());
     }
 
     void updateTask()

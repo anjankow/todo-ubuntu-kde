@@ -38,6 +38,10 @@ public:
     void restore(const QStringList &ids); // back to the active list
     void remove(const QStringList &ids); // permanent
 
+    // Appends a copy (title, description, labels) of each task to the end
+    // of the list as an active task. Returns the ids of the copies.
+    QStringList duplicate(const QStringList &ids);
+
     // Moves postponed tasks whose time has come back to the active list.
     int releaseDuePostponed(const QDateTime &now);
 

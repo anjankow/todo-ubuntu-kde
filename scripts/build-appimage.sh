@@ -45,6 +45,9 @@ export QMAKE="${QMAKE:-/usr/lib/qt5/bin/qmake}"
 export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
 # The application icon is an SVG file.
 export EXTRA_QT_PLUGINS="svg"
+# The interface is QML: its imports (Kirigami, the Plasma style of the
+# controls) are found by scanning the sources.
+export QML_SOURCES_PATHS="$repo/src/qml"
 export LDAI_OUTPUT="$output"
 export LINUXDEPLOY_OUTPUT_VERSION="$version"
 
@@ -72,11 +75,25 @@ for f in usr/bin/kdetodo apprun-hooks/kdetodo.sh \
         exit 1
     }
 done
-for lib in libKF5XmlGui libKF5WidgetsAddons libKF5ConfigCore libKF5I18n libQt5Widgets; do
+for f in usr/qml/org/kde/kirigami.2 usr/qml/org/kde/qqc2desktopstyle usr/qml/QtQuick/Controls.2 usr/qml/Qt/labs/platform; do
+    test -d "$check/squashfs-root/$f" || {
+        echo "QML module missing in the AppImage: $f" >&2
+        exit 1
+    }
+done
+for lib in libQt5Quick libQt5QuickControls2 libKF5ConfigCore libKF5I18n libQt5Widgets; do
     ls "$check/squashfs-root/usr/lib/$lib".so* >/dev/null 2>&1 || {
         echo "not bundled: $lib" >&2
         exit 1
     }
 done
 QT_QPA_PLATFORM=offscreen "$build/$output" --appimage-extract-and-run --version
+# The window loads from the bundled QML modules alone: still running after a few seconds.
+status=0
+HOME="$check" XDG_CONFIG_HOME="$check/config" QT_QPA_PLATFORM=offscreen QT_QUICK_BACKEND=software \
+    timeout 8 "$build/$output" --appimage-extract-and-run || status=$?
+[ "$status" -eq 124 ] || {
+    echo "the application did not stay running (exit status $status)" >&2
+    exit 1
+}
 rm -rf "$check"

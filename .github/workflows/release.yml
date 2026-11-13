@@ -55,6 +55,7 @@ jobs:
       - name: Test
         env:
           QT_QPA_PLATFORM: offscreen
+          QT_QUICK_BACKEND: software
         run: ctest --test-dir build --output-on-failure --timeout 300
       - name: Build packages
         run: |

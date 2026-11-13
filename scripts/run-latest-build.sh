@@ -54,8 +54,14 @@ missing="$(ldd "$binary" | awk '/not found/ {print $1}')"
 if [ -n "$missing" ]; then
     echo "These libraries are missing on this system:" >&2
     awk '{print "  " $0}' <<<"$missing" >&2
-    die "install them: sudo apt install libqt5widgets5t64 libkf5xmlgui5 libkf5i18n5 libkf5configcore5 libkf5coreaddons5 libkf5widgetsaddons5"
+    die "install them: sudo apt install libqt5quickcontrols2-5 libqt5widgets5t64 libkf5i18n5 libkf5configcore5 libkf5coreaddons5"
 fi
+
+# The interface needs these QML modules at run time.
+qmldir="$(qmake -query QT_INSTALL_QML 2>/dev/null || echo /usr/lib/x86_64-linux-gnu/qt5/qml)"
+for module in org/kde/kirigami.2 org/kde/qqc2desktopstyle QtQuick/Controls.2 QtQuick/Layouts Qt/labs/platform; do
+    [ -d "$qmldir/$module" ] || die "QML module $module is missing: sudo apt install qml-module-org-kde-kirigami2 qml-module-org-kde-qqc2desktopstyle qml-module-qtquick-controls2 qml-module-qtquick-layouts qml-module-qt-labs-platform"
+done
 
 if [ "$download_only" -eq 1 ]; then
     exit 0

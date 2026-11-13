@@ -22,8 +22,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(KDETODO_WERROR "Treat compiler warnings as errors" OFF)
 option(KDETODO_SANITIZE "Build with address and undefined behaviour sanitizers" OFF)
 
-find_package(Qt5 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets Test)
-find_package(KF5 ${KF5_MIN_VERSION} REQUIRED COMPONENTS CoreAddons I18n Config WidgetsAddons XmlGui)
+find_package(Qt5 ${QT_MIN_VERSION} REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2 Test)
+find_package(KF5 ${KF5_MIN_VERSION} REQUIRED COMPONENTS CoreAddons I18n Config DBusAddons)
+
+set(CMAKE_AUTORCC ON)
 
 add_compile_options(-Wall -Wextra -Wpedantic)
 if(KDETODO_WERROR)
@@ -63,7 +65,9 @@ set(CPACK_DEBIAN_FILE_NAME DEB-DEFAULT)
 set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
-set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt5svg5") # the application icon is an SVG file
+# Not found by shlibdeps: the QML modules the interface imports, and the
+# SVG support for the application icon.
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt5svg5, qml-module-qtquick2, qml-module-qtquick-window2, qml-module-qtquick-controls2, qml-module-qtquick-templates2, qml-module-qtquick-layouts, qml-module-qt-labs-platform, qml-module-org-kde-kirigami2, qml-module-org-kde-qqc2desktopstyle")
 include(CPack)
 
 feature_summary(WHAT ALL FATAL_ON_MISSING_REQUIRED_PACKAGES)
