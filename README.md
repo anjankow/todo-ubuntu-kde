@@ -2,25 +2,27 @@
 
 A simple todo list for KDE Plasma 5 (Qt Quick + Kirigami, KDE Frameworks 5).
 Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
-(your home directory by default; change it with the *Storage folder…* button).
+(your home directory by default; change it with *Settings* → *Storage folder…*).
 
 ## Using it
 
-- **Add a task** – type into the input above the list and press `Enter`;
-  the new task appears on top. `Shift+Enter` starts the description on the next line.
+- **Add a task** – click the input above the list (or press `Shift+Enter` while nothing is highlighted),
+  type and press `Enter`; the new task appears on top. In the input, `Shift+Enter` starts the description.
 - **Highlight** – one click highlights a task; `Up` / `Down` move the highlight, `Esc` removes it.
-- **Task card** – double-click a task (or press `Enter` on the highlighted one) to see and edit
+  `Space` ticks the highlighted task, `Shift+Up` / `Shift+Down` tick the tasks the highlight passes.
+- **Task card** – double-click a task (or press `Enter` / `Shift+Enter` on the highlighted one) to see and edit
   title, description and labels, or to complete, postpone or cancel the task.
 - **Quick complete** – hover a task and click the green checkmark at the end of its line.
 - **Select** – tick the checkbox of one or more tasks (`Ctrl+A` ticks all), then use the toolbar:
-  *Complete*, *Cancel task*, *Postpone*, *Restore*, *Delete*.
+  *Complete* (green checkmark), *Postpone* (calendar), *Cancel task* (gray cross), *Delete* (red bin)
+  and *Restore* (arrow). The buttons show only icons; hover one to see its name.
   With nothing ticked, the toolbar acts on the highlighted task.
   Deleting several tasks at once asks for confirmation; deletion is permanent.
 - **Postpone** – until tomorrow, 3 days, 1 week, 1 month or a custom date and time.
   Postponed tasks return to the list when the app is opened after that time.
 - **Tabs** – *Tasks*, *Postponed*, *Completed*, *Cancelled*.
 - **Reorder** – drag a task by its handle, or `Ctrl+Up` / `Ctrl+Down` on the highlighted task.
-- **Labels** – the *Labels…* button defines labels (name + one of 12 colors).
+- **Labels** – *Settings* → *Labels…* defines labels (name + one of 12 colors).
   Assign them in the task card, or tick tasks and click a label above the list.
   With nothing ticked, clicking a label filters the lists
   (a task is shown if it has any of the selected labels).
@@ -34,24 +36,29 @@ icon's context menu. Only one instance runs: starting the app again brings its w
 
 ## Keyboard shortcuts
 
+The list is also in the app: *Settings* (gear button) → *Keyboard shortcuts…*.
 "Selected" means the ticked tasks or, when none is ticked, the highlighted task.
 
 | Key | Action |
 | --- | --- |
-| `Enter` | In the input: create the task. With an empty input (or outside it): open the card of the highlighted task |
-| `Shift+Enter` | In the input: new line (the description follows the title) |
+| `Shift+Enter` | Nothing highlighted: start typing a new task (the only key way into the input). Task highlighted: open its card |
+| `Enter` | In the input: create the task. Task highlighted: open its card |
+| `Shift+Enter` in the input | New line: the description follows the title |
 | `Esc` | Leave the input and remove the highlight |
+| `Esc` `Esc` | Pressed twice quickly: untick all tasks |
 | `Up` / `Down` | Move the highlight |
+| `Shift+Up` / `Shift+Down` | Move the highlight and tick the tasks it passes (never unticks) |
+| `Space` | Tick or untick the highlighted task |
 | `Ctrl+Up` / `Ctrl+Down` | Move the highlighted task up / down in the list |
 | `Ctrl+A` | Tick all tasks of the current tab |
 | `Ctrl+D` | Duplicate the selected tasks (copies go to the bottom of the Tasks list) |
 | `Delete` | Cancel the selected tasks |
+| `Shift+Delete` | Delete the selected tasks for good (several at once ask first) |
 | `Enter` in the task card title | Save and close the card |
 | `Ctrl+Q` | Quit |
 
-While the input has the focus and contains text, `Up` / `Down`, `Ctrl+A`, `Ctrl+D` and `Delete`
-edit the text instead; press `Esc` first (the text stays as a draft) or finish the task with `Enter`.
-`Esc` and `Ctrl+Up` / `Ctrl+Down` always act on the task list. Click the input to type again.
+At start nothing is highlighted and the input does not have the focus: the keys go to the task list.
+Clicking a task also gives the keys to the list. In the empty input, `Up` / `Down` go back to the list.
 
 ## Install
 

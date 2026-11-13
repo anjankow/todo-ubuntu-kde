@@ -6,6 +6,7 @@
 
 #include <QClipboard>
 #include <QQmlApplicationEngine>
+#include <QQmlProperty>
 #include <QQuickItem>
 #include <QQuickWindow>
 #include <QStandardPaths>
@@ -131,6 +132,12 @@ struct Ui : TestEnv {
             QTest::keyClick(window, ch.toLatin1());
         }
     }
+    // Shift+Enter with nothing highlighted: the key way into the input.
+    void focusInput()
+    {
+        key(Qt::Key_Return, Qt::ShiftModifier);
+        QTRY_VERIFY(input()->hasActiveFocus());
+    }
     void typeTask(const QString &title)
     {
         type(title);
@@ -142,6 +149,10 @@ struct Ui : TestEnv {
     bool isOpen(const QString &dialog) const { return object(dialog)->property("opened").toBool(); }
     bool isClosed(const QString &dialog) const { return !object(dialog)->property("visible").toBool(); }
     QString highlighted() const { return list()->currentId(); }
+    bool listHasFocus() const { return item("listKeys")->hasActiveFocus(); }
+    // An entry of the Settings menu.
+    void settings(const QString &entry) { pickFromMenu("settingsButton", "settingsMenu", entry); }
+    QVariant buttonIcon(const QString &button, const char *part) const { return QQmlProperty::read(item(button), QString("icon.") + part); }
 };
 }
 
@@ -173,7 +184,7 @@ private Q_SLOTS:
     {
         Ui ui;
         ui.add("Old");
-        QVERIFY(ui.input()->hasActiveFocus()); // ready for typing right away
+        ui.focusInput();
         ui.type("First");
         QVERIFY(ui.store()->tasks().size() == 1); // typing alone does not create it
         ui.key(Qt::Key_Return);
@@ -190,6 +201,7 @@ private Q_SLOTS:
     void singleLetterIsATask()
     {
         Ui ui;
+        ui.focusInput();
         ui.typeTask("x");
         QCOMPARE(ui.shown(), QStringList({"x"}));
     }
@@ -197,6 +209,7 @@ private Q_SLOTS:
     void descriptionIsEnteredWithShiftEnter()
     {
         Ui ui;
+        ui.focusInput();
         ui.type("Call mum");
         ui.key(Qt::Key_Return, Qt::ShiftModifier);
         QVERIFY(ui.store()->tasks().isEmpty()); // not finalized yet
@@ -213,6 +226,7 @@ private Q_SLOTS:
     void emptyInputCreatesNoTask()
     {
         Ui ui;
+        ui.focusInput();
         ui.key(Qt::Key_Return);
         ui.type("   ");
         ui.key(Qt::Key_Return);
@@ -223,8 +237,9 @@ private Q_SLOTS:
     void unfinishedTextStaysAsDraftOnFocusLoss()
     {
         Ui ui;
+        ui.focusInput();
         ui.type("half typed");
-        ui.click("labelsButton"); // the dialog takes the focus
+        ui.settings("settingsLabels"); // the dialog takes the focus
         QTRY_VERIFY(ui.isOpen("labelsDialog"));
         QVERIFY(!ui.input()->hasActiveFocus());
         QVERIFY(ui.store()->tasks().isEmpty());
@@ -234,12 +249,13 @@ private Q_SLOTS:
     void clearedInputIsDroppedOnFocusLoss()
     {
         Ui ui;
+        ui.focusInput();
         ui.type("ab");
         ui.key(Qt::Key_Backspace);
         ui.key(Qt::Key_Backspace);
         ui.key(Qt::Key_Return, Qt::ShiftModifier); // only a blank line is left
         QVERIFY(!ui.inputText().isEmpty());
-        ui.click("labelsButton");
+        ui.settings("settingsLabels");
         QTRY_VERIFY(ui.isOpen("labelsDialog"));
         QVERIFY(ui.inputText().isEmpty());
         QVERIFY(ui.store()->tasks().isEmpty());
@@ -316,7 +332,7 @@ private Q_SLOTS:
         QCOMPARE(ui.store()->task(id)->description, QString("new description"));
         QCOMPARE(ui.store()->task(id)->labelIds, QStringList({work}));
         QCOMPARE(ui.savedTitles(), QStringList({"New title"}));
-        QTRY_VERIFY(ui.input()->hasActiveFocus()); // back to typing
+        QTRY_VERIFY(ui.listHasFocus()); // the keys go to the list again
 
         ui.doubleClickTask(id); // the label can be taken off again
         QTRY_VERIFY(ui.isOpen("taskCard"));
@@ -537,6 +553,7 @@ private Q_SLOTS:
     {
         Ui ui;
         ui.add("A");
+        ui.focusInput();
         ui.type("draft");
         ui.key(Qt::Key_A, Qt::ControlModifier);
         QCOMPARE(ui.list()->checkedCount(), 0);
@@ -580,11 +597,152 @@ private Q_SLOTS:
         Ui ui;
         const QString a = ui.add("A");
         ui.clickTask(a);
-        QGuiApplication::clipboard()->setText("from elsewhere");
         ui.key(Qt::Key_C, Qt::ControlModifier);
-        ui.key(Qt::Key_V, Qt::ControlModifier); // an ordinary paste into the input
+        ui.key(Qt::Key_V, Qt::ControlModifier);
         QCOMPARE(ui.shown(), QStringList({"A"}));
-        QCOMPARE(ui.inputText(), QString("from elsewhere"));
+    }
+
+    // --- focus and keys ---
+
+    void atStartNothingIsHighlightedAndTheInputHasNoFocus()
+    {
+        Ui ui;
+        ui.add("A");
+        QVERIFY(ui.highlighted().isEmpty());
+        QVERIFY(!ui.input()->hasActiveFocus());
+        QTRY_VERIFY(ui.listHasFocus());
+        ui.type("abc"); // typing alone does not reach the input
+        QVERIFY(ui.inputText().isEmpty());
+    }
+
+    void shiftEnterFocusesTheInputOnlyWithoutHighlight()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        ui.key(Qt::Key_Down); // highlighted: Shift+Enter opens the card
+        QCOMPARE(ui.highlighted(), a);
+        ui.key(Qt::Key_Return, Qt::ShiftModifier);
+        QTRY_VERIFY(ui.isOpen("taskCard"));
+        QVERIFY(!ui.input()->hasActiveFocus());
+        ui.click("cardClose");
+        QTRY_VERIFY(ui.isClosed("taskCard"));
+        QTRY_VERIFY(ui.listHasFocus());
+
+        ui.key(Qt::Key_Escape); // removes the highlight
+        QVERIFY(ui.highlighted().isEmpty());
+        ui.key(Qt::Key_Return, Qt::ShiftModifier); // now it goes to the input
+        QTRY_VERIFY(ui.input()->hasActiveFocus());
+        QVERIFY(ui.isClosed("taskCard"));
+        ui.typeTask("New");
+        QCOMPARE(ui.shown(), QStringList({"New", "A"}));
+        QVERIFY(ui.input()->hasActiveFocus()); // ready for the next one
+    }
+
+    void shiftEnterOnAnotherTabGoesToTheTasksTabInput()
+    {
+        Ui ui;
+        ui.click("tab-completed");
+        QTRY_COMPARE(ui.app->currentTab(), int(AppController::CompletedTab));
+        ui.focusInput();
+        QCOMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
+    }
+
+    void arrowsInTheEmptyInputGoToTheList()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        ui.focusInput();
+        ui.key(Qt::Key_Down);
+        QCOMPARE(ui.highlighted(), a);
+        QTRY_VERIFY(ui.listHasFocus());
+    }
+
+    void clickingATaskGivesTheKeysToTheList()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        ui.focusInput();
+        ui.clickTask(a);
+        QTRY_VERIFY(ui.listHasFocus());
+        ui.key(Qt::Key_Space);
+        QCOMPARE(ui.list()->checkedIds(), QStringList({a}));
+    }
+
+    void spaceTicksAndUnticksTheHighlightedTask()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        ui.add("B");
+        ui.key(Qt::Key_Space); // nothing highlighted: nothing happens
+        QCOMPARE(ui.list()->checkedCount(), 0);
+        ui.key(Qt::Key_Down);
+        ui.key(Qt::Key_Space);
+        QCOMPARE(ui.list()->checkedIds(), QStringList({a}));
+        QVERIFY(ui.item("check-" + a)->property("checked").toBool());
+        ui.key(Qt::Key_Space);
+        QCOMPARE(ui.list()->checkedCount(), 0);
+    }
+
+    void shiftArrowsTickTheTasksTheHighlightPasses()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        const QString c = ui.add("C");
+        const QString d = ui.add("D");
+        ui.key(Qt::Key_Down); // A
+        ui.key(Qt::Key_Down, Qt::ShiftModifier); // A and B
+        QCOMPARE(ui.list()->checkedIds(), QStringList({a, b}));
+        QCOMPARE(ui.highlighted(), b);
+        ui.key(Qt::Key_Down, Qt::ShiftModifier);
+        QCOMPARE(ui.list()->checkedIds(), QStringList({a, b, c}));
+        ui.key(Qt::Key_Up, Qt::ShiftModifier); // going back does not untick
+        QCOMPARE(ui.highlighted(), b);
+        QCOMPARE(ui.list()->checkedIds(), QStringList({a, b, c}));
+        ui.key(Qt::Key_Down);
+        ui.key(Qt::Key_Down); // a plain arrow neither ticks nor unticks
+        QCOMPARE(ui.highlighted(), d);
+        QCOMPARE(ui.list()->checkedIds(), QStringList({a, b, c}));
+    }
+
+    void escapeTwiceUnticksAllTasks()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        ui.tick(a);
+        ui.tick(b);
+        ui.clickTask(a);
+        ui.key(Qt::Key_Escape); // once: only the highlight goes
+        QVERIFY(ui.highlighted().isEmpty());
+        QCOMPARE(ui.list()->checkedCount(), 2);
+        QTest::qWait(700);
+        ui.key(Qt::Key_Escape); // not quick enough: still ticked
+        QCOMPARE(ui.list()->checkedCount(), 2);
+        ui.key(Qt::Key_Escape); // twice in a row
+        QCOMPARE(ui.list()->checkedCount(), 0);
+        QVERIFY(!ui.item("completeButton")->isEnabled());
+    }
+
+    void shiftDeleteDeletesTheSelectedTasks()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        const QString c = ui.add("C");
+        ui.clickTask(a);
+        ui.key(Qt::Key_Delete, Qt::ShiftModifier); // one task: at once, for good
+        QVERIFY(!ui.store()->task(a));
+        QCOMPARE(ui.savedTitles(), QStringList({"B", "C"}));
+
+        QTRY_VERIFY(ui.row(b));
+        ui.tick(b);
+        ui.tick(c);
+        ui.key(Qt::Key_Delete, Qt::ShiftModifier); // several: asks first
+        QTRY_VERIFY(ui.isOpen("confirmDeleteDialog"));
+        QCOMPARE(ui.shown().size(), 2);
+        ui.click("confirmDeleteButton");
+        QTRY_VERIFY(ui.shown().isEmpty());
     }
 
     void escapeLeavesTheInputAndKeysGoToTheTasks()
@@ -592,8 +750,8 @@ private Q_SLOTS:
         Ui ui;
         const QString a = ui.add("A");
         ui.add("B");
+        ui.focusInput();
         ui.type("draft");
-        QVERIFY(ui.input()->hasActiveFocus());
         ui.key(Qt::Key_Escape);
         QVERIFY(!ui.input()->hasActiveFocus());
         QCOMPARE(ui.inputText(), QString("draft")); // the draft stays
@@ -775,7 +933,7 @@ private Q_SLOTS:
     void labelsDialogDefinesLabels()
     {
         Ui ui;
-        ui.click("labelsButton");
+        ui.settings("settingsLabels");
         QTRY_VERIFY(ui.isOpen("labelsDialog"));
         for (int i = 0; i < 12; ++i) {
             QVERIFY(ui.item(QString("color-%1").arg(i)));
@@ -873,7 +1031,7 @@ private Q_SLOTS:
     void toolbarButtonsAllFitInTheInitialWindow()
     {
         Ui ui;
-        const QStringList buttons = {"completeButton", "cancelButton", "postponeButton", "restoreButton", "deleteButton", "labelsButton", "storageButton"};
+        const QStringList buttons = {"completeButton", "postponeButton", "cancelButton", "deleteButton", "restoreButton", "settingsButton"};
         qreal previousRight = 0;
         for (const QString &name : buttons) {
             QQuickItem *button = ui.item(name);
@@ -884,6 +1042,78 @@ private Q_SLOTS:
             QVERIFY2(button->width() >= button->implicitWidth() - 0.5, qPrintable(name)); // not squeezed
             previousRight = rect.right();
         }
+    }
+
+    void stateButtonsShowOnlyIconsWithTheirNameAsHint()
+    {
+        Ui ui;
+        struct Expected {
+            const char *button;
+            const char *hint;
+            const char *iconName;
+            const char *iconSource;
+        };
+        const QList<Expected> buttons = {
+            {"completeButton", "Complete", "checkmark", ""},
+            {"postponeButton", "Postpone", "view-calendar", ""},
+            {"cancelButton", "Cancel task", "", "qrc:/qml/icons/cancel.svg"},
+            {"deleteButton", "Delete", "", "qrc:/qml/icons/delete.svg"},
+            {"restoreButton", "Restore", "edit-undo", ""},
+            {"settingsButton", "Settings", "configure", ""},
+        };
+        for (const Expected &e : buttons) {
+            QQuickItem *button = ui.item(e.button);
+            QVERIFY2(button, e.button);
+            QCOMPARE(button->property("display").toInt(), 0); // AbstractButton.IconOnly
+            QCOMPARE(button->property("text").toString(), QString(e.hint));
+            QCOMPARE(ui.buttonIcon(e.button, "name").toString(), QString(e.iconName));
+            QCOMPARE(ui.buttonIcon(e.button, "source").toUrl().toString(), QString(e.iconSource));
+        }
+        // The checkmark is green; the bin and the cross bring their own red and gray.
+        QCOMPARE(ui.buttonIcon("completeButton", "color").value<QColor>(), QColor("#27ae60"));
+        // The text is shown as the hover hint (IconButton binds the tool tip to
+        // it); hovering toolbar buttons is not delivered on the test platform.
+    }
+
+    void cardStateButtonsShowOnlyIcons()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        ui.doubleClickTask(a);
+        QTRY_VERIFY(ui.isOpen("taskCard"));
+        for (const char *name : {"cardComplete", "cardPostpone", "cardCancelTask"}) {
+            QCOMPARE(ui.item(name)->property("display").toInt(), 0); // IconOnly
+        }
+        QCOMPARE(ui.item("cardComplete")->property("text").toString(), QString("Complete"));
+        QCOMPARE(ui.buttonIcon("cardComplete", "name").toString(), QString("checkmark"));
+        QCOMPARE(ui.buttonIcon("cardPostpone", "name").toString(), QString("view-calendar"));
+        QCOMPARE(ui.buttonIcon("cardCancelTask", "source").toUrl().toString(), QString("qrc:/qml/icons/cancel.svg"));
+    }
+
+    void settingsMenuHasLabelsStorageAndShortcuts()
+    {
+        QTemporaryDir other;
+        Ui ui;
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        QStringList keys;
+        for (int i = 0; ui.item(QString("shortcutKeys-%1").arg(i)); ++i) {
+            keys.append(ui.item(QString("shortcutKeys-%1").arg(i))->property("text").toString());
+        }
+        for (const char *key : {"Shift+Enter", "Enter", "Esc", "Esc Esc", "Up / Down", "Shift+Up / Shift+Down", "Space", "Ctrl+Up / Ctrl+Down", "Ctrl+A",
+                 "Ctrl+D", "Delete", "Shift+Delete", "Ctrl+Q"}) {
+            QVERIFY2(keys.contains(key), key);
+        }
+        QMetaObject::invokeMethod(ui.object("shortcutsDialog"), "close");
+        QTRY_VERIFY(ui.isClosed("shortcutsDialog"));
+
+        ui.settings("settingsLabels");
+        QTRY_VERIFY(ui.isOpen("labelsDialog"));
+        ui.click("labelsClose");
+        QTRY_VERIFY(ui.isClosed("labelsDialog"));
+        QVERIFY(ui.item("settingsButton"));
+        QVERIFY(!ui.item("labelsButton")); // no separate buttons any more
+        QVERIFY(!ui.item("storageButton"));
     }
 
     void thereIsNoMenuBarOrHelpMenu()

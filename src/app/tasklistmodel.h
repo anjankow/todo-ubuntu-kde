@@ -42,6 +42,11 @@ public:
     Q_INVOKABLE int indexOfId(const QString &id) const;
     Q_INVOKABLE void setChecked(const QString &id, bool checked);
     Q_INVOKABLE void checkAll();
+    // Space: ticks the highlighted task, or unticks it when it is ticked.
+    Q_INVOKABLE void toggleCurrentChecked();
+    // Shift+Up/Down: moves the highlight and ticks both the task it leaves
+    // and the one it reaches (it never unticks).
+    Q_INVOKABLE void extendSelection(int delta);
     Q_INVOKABLE void clearChecked();
 
     // Moves the highlight up (-1) or down (+1); without a highlight it

@@ -35,7 +35,8 @@ int main(int argc, char **argv)
     about.processCommandLine(&parser);
 
     // One instance only: starting the application again raises this one.
-    const KDBusService service(KDBusService::Unique);
+    // Without a D-Bus session (rare outside a desktop) it still starts.
+    const KDBusService service(KDBusService::Unique | KDBusService::NoExitOnFailure);
 
     AppController controller;
     controller.setKeepRunningInTray(TrayIcon::isAvailable());
