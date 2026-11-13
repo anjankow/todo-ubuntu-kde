@@ -14,7 +14,7 @@ Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
   title, description and labels, or to complete, postpone or cancel the task.
 - **Quick complete** – hover a task and click the green checkmark at the end of its line.
 - **Select** – tick the checkbox of one or more tasks (`Ctrl+A` ticks all), then use the buttons
-  between the input and the list:
+  between the input and the list (each tab shows only the buttons that apply to it):
   *Complete* (green checkmark), *Postpone* (calendar), *Cancel task* (gray cross), *Delete* (red bin)
   and *Restore* (arrow). The buttons show only icons; hover one to see its name.
   With nothing ticked, they act on the highlighted task. In a dark colour scheme the calendar and
@@ -60,7 +60,7 @@ The list is also in the app: *Settings* (the button at the right end of the tool
 | `Shift+Up` / `Shift+Down` | Move the highlight and tick the tasks it passes (never unticks) |
 | `Space` | Tick or untick the highlighted task |
 | `Ctrl+Up` / `Ctrl+Down` | Move the highlighted task up / down in the list |
-| `Ctrl+PgUp` / `Ctrl+PgDown` | Next / previous tab (wraps around) |
+| `Ctrl+PgDown` / `Ctrl+PgUp` | Next / previous tab (wraps around) |
 | `Ctrl+A` | Tick all tasks of the current tab |
 | `Ctrl+D` | Duplicate the selected tasks (copies go to the bottom of the Tasks list) |
 | `Delete` | Cancel the selected tasks |

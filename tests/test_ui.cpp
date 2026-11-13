@@ -14,6 +14,18 @@
 
 namespace
 {
+QtMessageHandler g_defaultHandler = nullptr;
+QStringList g_qmlProblems;
+
+// Binding loops and other warnings of the application's own QML (qrc:/qml)
+// make the running test fail; those of the libraries are only printed.
+void collectQmlProblems(QtMsgType type, const QMessageLogContext &context, const QString &message)
+{
+    if (type != QtDebugMsg && type != QtInfoMsg && message.contains(QLatin1String("qrc:/qml/"))) {
+        g_qmlProblems.append(message);
+    }
+    g_defaultHandler(type, context, message);
+}
 QByteArray readFile(const QString &path)
 {
     QFile file(path);
@@ -166,7 +178,19 @@ class TestUi : public QObject
 {
     Q_OBJECT
 private Q_SLOTS:
-    void initTestCase() { QStandardPaths::setTestModeEnabled(true); }
+    void initTestCase()
+    {
+        QStandardPaths::setTestModeEnabled(true);
+        // Here and not in main(): QtTest installs its own handler when it starts.
+        g_defaultHandler = qInstallMessageHandler(collectQmlProblems);
+    }
+    void init() { g_qmlProblems.clear(); }
+    void cleanup()
+    {
+        const QStringList problems = g_qmlProblems;
+        g_qmlProblems.clear();
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
+    }
 
     // --- creating tasks ---
 
@@ -424,9 +448,9 @@ private Q_SLOTS:
         QTRY_VERIFY(ui.row(done));
         ui.doubleClickTask(done);
         QTRY_VERIFY(ui.isOpen("taskCard"));
-        QVERIFY(!ui.item("cardComplete")->isEnabled());
-        QVERIFY(ui.item("cardCancelTask")->isEnabled());
-        QVERIFY(!ui.item("cardPostpone")->isEnabled());
+        QVERIFY(!ui.item("cardComplete")->isVisible());
+        QVERIFY(ui.item("cardCancelTask")->isVisible());
+        QVERIFY(!ui.item("cardPostpone")->isVisible());
     }
 
     // --- ticking and the toolbar ---
@@ -480,13 +504,13 @@ private Q_SLOTS:
         Ui ui;
         const QString a = ui.add("A");
         ui.app->cancel({a});
-        QVERIFY(!ui.item("restoreButton")->isEnabled());
+        QVERIFY(!ui.item("restoreButton")->isVisible()); // not on the Tasks tab
         ui.click("tab-cancelled");
         QTRY_COMPARE(ui.app->currentTab(), int(AppController::CancelledTab));
         QTRY_VERIFY(ui.row(a));
         ui.tick(a);
         QVERIFY(ui.item("restoreButton")->isEnabled());
-        QVERIFY(!ui.item("cancelButton")->isEnabled());
+        QVERIFY(!ui.item("cancelButton")->isVisible());
         ui.click("restoreButton");
         QCOMPARE(ui.shown(), QStringList({"A"}));
     }
@@ -1039,7 +1063,16 @@ private Q_SLOTS:
     void toolbarButtonsAllFitInTheInitialWindow()
     {
         Ui ui;
-        const QStringList buttons = {"completeButton", "postponeButton", "cancelButton", "deleteButton", "restoreButton", "settingsButton"};
+        // The Postponed tab shows all state buttons.
+        ui.click("tab-postponed");
+        QTRY_COMPARE(ui.app->currentTab(), int(AppController::PostponedTab));
+        QTRY_VERIFY(ui.item("restoreButton")->isVisible());
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        QTest::qWait(50); // the row lays out the buttons that just became visible
+        const QStringList buttons = {"completeButton", "postponeButton", "cancelButton", "deleteButton", "restoreButton"};
+        QQuickItem *settings = ui.item("settingsButton"); // alone in the bar at the top
+        QVERIFY(settings && settings->isVisible());
+        QVERIFY(settings->mapRectToScene(QRectF(0, 0, settings->width(), settings->height())).right() <= ui.window->width());
         qreal previousRight = 0;
         for (const QString &name : buttons) {
             QQuickItem *button = ui.item(name);
@@ -1110,7 +1143,7 @@ private Q_SLOTS:
             keys.append(ui.item(QString("shortcutKeys-%1").arg(i))->property("text").toString());
         }
         for (const char *key : {"Shift+Enter", "Enter", "Esc", "Esc Esc", "Up / Down", "Shift+Up / Shift+Down", "Space", "Ctrl+Up / Ctrl+Down",
-                 "Ctrl+PgUp / Ctrl+PgDown", "Ctrl+A", "Ctrl+D", "Delete", "Shift+Delete", "Ctrl+Q"}) {
+                 "Ctrl+PgDown / Ctrl+PgUp", "Ctrl+A", "Ctrl+D", "Delete", "Shift+Delete", "Ctrl+Q"}) {
             QVERIFY2(keys.contains(key), key);
         }
         QMetaObject::invokeMethod(ui.object("shortcutsDialog"), "close");
@@ -1165,37 +1198,80 @@ private Q_SLOTS:
 
         ui.click("tab-completed"); // other tabs have no input, the buttons stay
         QTRY_VERIFY(!input->isVisible());
-        QVERIFY(ui.item("completeButton")->isVisible());
+        QVERIFY(ui.item("deleteButton")->isVisible());
         const qreal listTop2 = ui.item("completedList")->mapToScene(QPointF(0, 0)).y();
         QVERIFY(listTop2 >= ui.item("stateRow")->mapToScene(QPointF(0, ui.item("stateRow")->height())).y());
     }
 
-    void ctrlPageUpAndDownSwitchTabsAndWrap()
+    void ctrlPageDownAndUpSwitchTabsAndWrap()
     {
         Ui ui;
         QCOMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
-        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
-        QCOMPARE(ui.app->currentTab(), int(AppController::PostponedTab));
-        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
-        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
-        QCOMPARE(ui.app->currentTab(), int(AppController::CancelledTab));
-        ui.key(Qt::Key_PageUp, Qt::ControlModifier); // wraps to the first
-        QCOMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
-        ui.key(Qt::Key_PageDown, Qt::ControlModifier); // and back to the last
-        QCOMPARE(ui.app->currentTab(), int(AppController::CancelledTab));
         ui.key(Qt::Key_PageDown, Qt::ControlModifier);
+        QCOMPARE(ui.app->currentTab(), int(AppController::PostponedTab));
+        ui.key(Qt::Key_PageDown, Qt::ControlModifier);
+        ui.key(Qt::Key_PageDown, Qt::ControlModifier);
+        QCOMPARE(ui.app->currentTab(), int(AppController::CancelledTab));
+        ui.key(Qt::Key_PageDown, Qt::ControlModifier); // wraps to the first
+        QCOMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier); // and back to the last
+        QCOMPARE(ui.app->currentTab(), int(AppController::CancelledTab));
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
         QCOMPARE(ui.app->currentTab(), int(AppController::CompletedTab));
-        ui.key(Qt::Key_PageDown); // without Ctrl: nothing
+        ui.key(Qt::Key_PageUp); // without Ctrl: nothing
         QCOMPARE(ui.app->currentTab(), int(AppController::CompletedTab));
 
-        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
-        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
+        ui.key(Qt::Key_PageDown, Qt::ControlModifier);
+        ui.key(Qt::Key_PageDown, Qt::ControlModifier);
         QCOMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
         ui.focusInput(); // also while typing a task
         ui.type("draft");
-        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
+        ui.key(Qt::Key_PageDown, Qt::ControlModifier);
         QCOMPARE(ui.app->currentTab(), int(AppController::PostponedTab));
         QTRY_VERIFY(ui.listHasFocus());
+    }
+
+    void eachTabShowsOnlyItsButtons()
+    {
+        Ui ui;
+        const QList<QPair<const char *, QStringList>> tabs = {
+            {"tab-active", {"completeButton", "postponeButton", "cancelButton", "deleteButton"}},
+            {"tab-postponed", {"completeButton", "postponeButton", "cancelButton", "deleteButton", "restoreButton"}},
+            {"tab-completed", {"cancelButton", "deleteButton", "restoreButton"}},
+            {"tab-cancelled", {"completeButton", "deleteButton", "restoreButton"}},
+        };
+        const QStringList all = {"completeButton", "postponeButton", "cancelButton", "deleteButton", "restoreButton"};
+        for (const auto &tab : tabs) {
+            ui.click(tab.first);
+            QTRY_VERIFY(ui.item(tab.first)->property("checked").toBool());
+            for (const QString &button : all) {
+                QVERIFY2(ui.item(button)->isVisible() == tab.second.contains(button), qPrintable(QString(tab.first) + " " + button));
+            }
+        }
+    }
+
+    void cardShowsOnlyTheStateButtonsThatApply()
+    {
+        Ui ui;
+        const QString done = ui.add("Done");
+        const QString cancelled = ui.add("Cancelled");
+        const QString active = ui.add("Active");
+        ui.app->complete({done});
+        ui.app->cancel({cancelled});
+        const QList<QPair<QString, QStringList>> cases = {
+            {active, {"cardComplete", "cardPostpone", "cardCancelTask"}},
+            {done, {"cardCancelTask"}},
+            {cancelled, {"cardComplete"}},
+        };
+        for (const auto &c : cases) {
+            QMetaObject::invokeMethod(ui.window, "openCard", Q_ARG(QVariant, c.first));
+            QTRY_VERIFY(ui.isOpen("taskCard"));
+            for (const char *button : {"cardComplete", "cardPostpone", "cardCancelTask"}) {
+                QVERIFY2(ui.item(button)->isVisible() == c.second.contains(button), button);
+            }
+            ui.click("cardClose");
+            QTRY_VERIFY(ui.isClosed("taskCard"));
+        }
     }
 
     // --- tasks back from Postponed ---

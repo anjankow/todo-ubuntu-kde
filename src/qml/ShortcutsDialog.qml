@@ -18,7 +18,7 @@ QQC2.Dialog {
         {keys: "Shift+Up / Shift+Down", action: i18n("Move the highlight and tick the tasks it passes")},
         {keys: "Space", action: i18n("Tick or untick the highlighted task")},
         {keys: "Ctrl+Up / Ctrl+Down", action: i18n("Move the highlighted task up or down in the list")},
-        {keys: "Ctrl+PgUp / Ctrl+PgDown", action: i18n("Next / previous tab")},
+        {keys: "Ctrl+PgDown / Ctrl+PgUp", action: i18n("Next / previous tab")},
         {keys: "Ctrl+A", action: i18n("Tick all tasks of the tab")},
         {keys: "Ctrl+D", action: i18n("Duplicate the selected tasks")},
         {keys: "Delete", action: i18n("Cancel the selected tasks")},
@@ -33,24 +33,35 @@ QQC2.Dialog {
     title: i18n("Keyboard shortcuts")
     standardButtons: QQC2.Dialog.Close
 
-    contentItem: GridLayout {
-        columns: 2
-        columnSpacing: Kirigami.Units.largeSpacing
-        rowSpacing: Kirigami.Units.smallSpacing
+    // The grid gets its width from the dialog and only hands its height back:
+    // used directly as the content, the wrapping labels would make the
+    // dialog's size depend on itself (a binding loop).
+    contentItem: Item {
+        implicitHeight: grid.implicitHeight
 
-        Repeater {
-            model: dialog.shortcuts.length * 2
+        GridLayout {
+            id: grid
+            width: parent.width
+            columns: 2
+            columnSpacing: Kirigami.Units.largeSpacing
+            rowSpacing: Kirigami.Units.smallSpacing
 
-            QQC2.Label {
-                readonly property var entry: dialog.shortcuts[Math.floor(index / 2)]
-                readonly property bool isKey: index % 2 === 0
+            Repeater {
+                model: dialog.shortcuts.length * 2
 
-                objectName: isKey ? "shortcutKeys-" + Math.floor(index / 2) : "shortcutAction-" + Math.floor(index / 2)
-                Layout.fillWidth: !isKey
-                Layout.alignment: Qt.AlignTop
-                text: isKey ? entry.keys : entry.action
-                font.bold: isKey
-                wrapMode: isKey ? Text.NoWrap : Text.Wrap
+                QQC2.Label {
+                    readonly property var entry: dialog.shortcuts[Math.floor(index / 2)]
+                    readonly property bool isKey: index % 2 === 0
+
+                    objectName: isKey ? "shortcutKeys-" + Math.floor(index / 2) : "shortcutAction-" + Math.floor(index / 2)
+                    Layout.fillWidth: !isKey
+                    // Wrapping text needs a width that does not come from itself.
+                    Layout.preferredWidth: isKey ? -1 : 1
+                    Layout.alignment: Qt.AlignTop
+                    text: isKey ? entry.keys : entry.action
+                    font.bold: isKey
+                    wrapMode: isKey ? Text.NoWrap : Text.Wrap
+                }
             }
         }
     }

@@ -43,7 +43,7 @@ export PATH="$tools:$PATH" # linuxdeploy finds its plugins in PATH
 export QMAKE="${QMAKE:-/usr/lib/qt5/bin/qmake}"
 # Next to xcb: the smoke test below starts the application without a display.
 export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
-# The application icon is an SVG file.
+# The button icons are SVG files.
 export EXTRA_QT_PLUGINS="svg"
 # The interface is QML: its imports (Kirigami, the Plasma style of the
 # controls) are found by scanning the sources.
@@ -56,7 +56,7 @@ linuxdeploy-x86_64.AppImage \
     --appdir "$appdir" \
     --executable "$appdir/usr/bin/kdetodo" \
     --desktop-file "$appdir/usr/share/applications/org.anjankow.kdetodo.desktop" \
-    --icon-file "$appdir/usr/share/icons/hicolor/scalable/apps/org.anjankow.kdetodo.svg" \
+    --icon-file "$appdir/usr/share/icons/hicolor/256x256/apps/org.anjankow.kdetodo.png" \
     --plugin qt \
     --output appimage
 
@@ -68,7 +68,7 @@ check="$build/appimage-check"
 rm -rf "$check" && mkdir -p "$check"
 (cd "$check" && "$build/$output" --appimage-extract >/dev/null)
 for f in usr/bin/kdetodo apprun-hooks/kdetodo.sh \
-    usr/share/icons/hicolor/scalable/apps/org.anjankow.kdetodo.svg \
+    usr/share/icons/hicolor/256x256/apps/org.anjankow.kdetodo.png \
     usr/plugins/platforms/libqxcb.so usr/plugins/platforms/libqoffscreen.so; do
     test -e "$check/squashfs-root/$f" || {
         echo "missing in the AppImage: $f" >&2
