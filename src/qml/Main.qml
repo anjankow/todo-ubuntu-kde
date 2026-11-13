@@ -112,8 +112,8 @@ Kirigami.ApplicationWindow {
             if (!ctrl) {
                 return false
             }
-            // Ctrl+PgUp: next tab, Ctrl+PgDown: previous tab, both wrap around.
-            app.currentTab = (app.currentTab + (event.key === Qt.Key_PageUp ? 1 : 3)) % 4
+            // Ctrl+PgDown: next tab, Ctrl+PgUp: previous tab, both wrap around.
+            app.currentTab = (app.currentTab + (event.key === Qt.Key_PageDown ? 1 : 3)) % 4
             focusList()
             return true
         case Qt.Key_Space:
@@ -327,6 +327,8 @@ Kirigami.ApplicationWindow {
                         objectName: "completeButton"
                         text: i18n("Complete")
                         iconFile: "complete"
+                        // Each tab shows only the buttons that apply to it.
+                        visible: app.currentTab !== 2 // not on Completed
                         enabled: app.canComplete
                         onClicked: app.completeSelected()
                     }
@@ -336,6 +338,7 @@ Kirigami.ApplicationWindow {
                         text: i18n("Postpone")
                         iconFile: "postpone"
                         themed: true
+                        visible: app.currentTab === 0 || app.currentTab === 1 // Tasks, Postponed
                         enabled: app.canPostpone
                         onClicked: postponeMenu.popup(postponeButton, 0, postponeButton.height)
 
@@ -353,6 +356,7 @@ Kirigami.ApplicationWindow {
                         text: i18n("Cancel task")
                         iconFile: "cancel"
                         themed: true
+                        visible: app.currentTab !== 3 // not on Cancelled
                         enabled: app.canCancel
                         onClicked: app.cancelSelected()
                     }
@@ -367,6 +371,7 @@ Kirigami.ApplicationWindow {
                         objectName: "restoreButton"
                         text: i18n("Restore")
                         icon.name: "edit-undo"
+                        visible: app.currentTab !== 0 // not on Tasks
                         enabled: app.canRestore
                         onClicked: app.restoreSelected()
                     }

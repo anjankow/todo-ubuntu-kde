@@ -105,7 +105,7 @@ QQC2.Dialog {
                 objectName: "cardComplete"
                 text: i18n("Complete")
                 iconFile: "complete"
-                enabled: card.taskState !== "completed"
+                visible: card.taskState !== "completed"
                 onClicked: {
                     if (card.save()) {
                         app.complete([card.taskId])
@@ -119,7 +119,7 @@ QQC2.Dialog {
                 text: i18n("Postpone")
                 iconFile: "postpone"
                 themed: true
-                enabled: card.taskState === "active" || card.taskState === "postponed"
+                visible: card.taskState === "active" || card.taskState === "postponed"
                 onClicked: cardPostponeMenu.popup(cardPostponeButton, 0, cardPostponeButton.height)
 
                 PostponeMenu {
@@ -146,7 +146,7 @@ QQC2.Dialog {
                 text: i18n("Cancel task")
                 iconFile: "cancel"
                 themed: true
-                enabled: card.taskState !== "cancelled"
+                visible: card.taskState !== "cancelled"
                 onClicked: {
                     if (card.save()) {
                         app.cancel([card.taskId])
