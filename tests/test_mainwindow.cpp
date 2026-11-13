@@ -789,7 +789,7 @@ private Q_SLOTS:
         auto *toolbar = f.window->findChild<QToolBar *>("mainToolBar");
         QVERIFY(toolbar);
         const QList<QAction *> actions = {f.window->completeAction(), f.window->cancelAction(), f.window->postponeAction(), f.window->restoreAction(),
-            f.window->deleteAction(), f.window->labelAction(), f.window->labelsDialogAction(), f.window->storageFolderAction()};
+            f.window->deleteAction(), f.window->labelsDialogAction(), f.window->storageFolderAction()};
         for (QAction *action : actions) {
             QWidget *button = toolbar->widgetForAction(action);
             QVERIFY2(button, qPrintable(action->text()));
@@ -844,7 +844,7 @@ private Q_SLOTS:
 
     // --- labels ---
 
-    void labelSelectedTasks()
+    void clickingFilterLabelsTheSelectedTasks()
     {
         Fixture f;
         const QString work = f.store()->addLabel("Work", 0);
@@ -854,38 +854,59 @@ private Q_SLOTS:
         const QString c = f.store()->addTask("C");
         f.store()->setTaskLabels(a, {work});
 
-        QVERIFY(!f.window->labelAction()->isEnabled()); // nothing selected
-        QVERIFY(f.window->labelMenuAction(work));
-        QCOMPARE(f.window->labelMenuAction(home)->text(), QString("Home"));
-
         f.clickCheckbox(0);
         f.clickCheckbox(1);
-        QVERIFY(f.window->labelAction()->isEnabled());
 
         // Not all selected tasks have it yet: it is added to those missing it.
-        f.window->labelMenuAction(work)->trigger();
+        f.window->filterButton(work)->click();
         QCOMPARE(f.store()->task(a)->labelIds, QStringList({work}));
         QCOMPARE(f.store()->task(b)->labelIds, QStringList({work}));
         QVERIFY(f.store()->task(c)->labelIds.isEmpty());
         QCOMPARE(f.view()->checkedIds().size(), 2); // selection is kept
 
-        f.window->labelMenuAction(home)->trigger();
+        // The lists are not filtered by that click.
+        QVERIFY(f.window->labelFilter().isEmpty());
+        QVERIFY(!f.window->filterButton(work)->isChecked());
+        QCOMPARE(f.shown(), QStringList({"A", "B", "C"}));
+
+        f.window->filterButton(home)->click();
         QCOMPARE(f.store()->task(a)->labelIds, QStringList({work, home}));
 
         // All selected tasks have it: it is removed from them.
-        f.window->labelMenuAction(work)->trigger();
+        f.window->filterButton(work)->click();
         QCOMPARE(f.store()->task(a)->labelIds, QStringList({home}));
         QCOMPARE(f.store()->task(b)->labelIds, QStringList({home}));
+        QVERIFY(f.window->labelFilter().isEmpty());
     }
 
-    void labelActionNeedsLabels()
+    void filterStaysAsItWasWhenLabellingSelectedTasks()
     {
         Fixture f;
-        f.add("A");
+        const QString work = f.store()->addLabel("Work", 0);
+        const QString home = f.store()->addLabel("Home", 1);
+        const QString a = f.store()->addTask("A");
+        f.store()->setTaskLabels(a, {work});
+        f.add("B");
+
+        f.window->filterButton(work)->click(); // nothing ticked: filters
+        QCOMPARE(f.shown(), QStringList({"A"}));
         f.clickCheckbox(0);
-        QVERIFY(!f.window->labelAction()->isEnabled());
+        f.window->filterButton(home)->click(); // ticked: labels
+        QCOMPARE(f.store()->task(a)->labelIds, QStringList({work, home}));
+        QCOMPARE(f.window->labelFilter(), QSet<QString>({work}));
+        QVERIFY(f.window->filterButton(work)->isChecked());
+        QVERIFY(!f.window->filterButton(home)->isChecked());
+        QCOMPARE(f.shown(), QStringList({"A"}));
+    }
+
+    void thereIsNoLabelToolbarButton()
+    {
+        Fixture f;
         f.store()->addLabel("Work", 0);
-        QVERIFY(f.window->labelAction()->isEnabled());
+        auto *toolbar = f.window->findChild<QToolBar *>("mainToolBar");
+        for (const QAction *action : toolbar->actions()) {
+            QVERIFY(action->text() != QString("Label"));
+        }
     }
 
     void filterByLabels()

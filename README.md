@@ -12,14 +12,14 @@ Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
 - **Task card** – click a task title to see and edit title, description and labels,
   or to complete, postpone or cancel the task.
 - **Select** – tick the checkbox of one or more tasks (`Ctrl+A` selects all), then use the toolbar:
-  *Complete*, *Cancel task*, *Postpone*, *Restore*, *Delete*, *Label*.
+  *Complete*, *Cancel task*, *Postpone*, *Restore*, *Delete*.
   Deleting several tasks at once asks for confirmation; deletion is permanent.
 - **Postpone** – until tomorrow, 3 days, 1 week, 1 month or a custom date and time.
   Postponed tasks return to the list when the app is opened after that time.
 - **Tabs** – *Tasks*, *Postponed*, *Completed*, *Cancelled*.
 - **Reorder** – drag tasks, or `Ctrl+Up` / `Ctrl+Down`.
 - **Labels** – the *Labels…* button defines labels (name + one of 12 colors);
-  assign them in the task card or to the selected tasks with *Label*; filter with the label buttons above the list
+  assign them in the task card, or tick tasks and click a label button above the list; filter with the label buttons above the list
   (a task is shown if it has any of the selected labels).
 
 ## Install

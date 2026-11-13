@@ -153,9 +153,6 @@ void MainWindow::setupActions()
     m_postpone = new QAction(QIcon::fromTheme(QStringLiteral("chronometer")), i18nc("@action", "Postpone"), this);
     m_restore = new QAction(QIcon::fromTheme(QStringLiteral("edit-undo")), i18nc("@action", "Restore"), this);
     m_delete = new QAction(QIcon::fromTheme(QStringLiteral("edit-delete")), i18nc("@action", "Delete"), this);
-    m_label = new QAction(QIcon::fromTheme(QStringLiteral("tag")), i18nc("@action", "Label"), this);
-    m_labelMenu = new QMenu(this);
-    m_label->setMenu(m_labelMenu);
     m_labelsDialog = new QAction(QIcon::fromTheme(QStringLiteral("configure")), i18nc("@action", "Labels…"), this);
     m_storageFolder = new QAction(QIcon::fromTheme(QStringLiteral("folder")), i18nc("@action", "Storage folder…"), this);
     connect(m_labelsDialog, &QAction::triggered, this, &MainWindow::showLabelsDialog);
@@ -197,13 +194,11 @@ void MainWindow::setupActions()
     toolbar->setObjectName(QStringLiteral("mainToolBar"));
     toolbar->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);
     toolbar->setMovable(false);
-    toolbar->addActions({m_complete, m_cancel, m_postpone, m_restore, m_delete, m_label});
+    toolbar->addActions({m_complete, m_cancel, m_postpone, m_restore, m_delete});
     toolbar->addSeparator();
     toolbar->addActions({m_labelsDialog, m_storageFolder});
-    for (QAction *action : {m_postpone, m_label}) {
-        if (auto *button = qobject_cast<QToolButton *>(toolbar->widgetForAction(action))) {
-            button->setPopupMode(QToolButton::InstantPopup);
-        }
+    if (auto *button = qobject_cast<QToolButton *>(toolbar->widgetForAction(m_postpone))) {
+        button->setPopupMode(QToolButton::InstantPopup);
     }
     addToolBar(toolbar);
 
@@ -261,7 +256,6 @@ void MainWindow::onStoreChanged()
         save();
     }
     rebuildFilterBar();
-    rebuildLabelMenu();
     const QList<TaskListView *> views = m_views.values();
     for (TaskListView *view : views) {
         view->setLabelFilter(m_filter);
@@ -272,7 +266,12 @@ void MainWindow::onStoreChanged()
 
 void MainWindow::rebuildFilterBar()
 {
-    qDeleteAll(m_filterBar->findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly));
+    // Not deleted at once: this can run from a click on one of the buttons.
+    const QList<QWidget *> oldWidgets = m_filterBar->findChildren<QWidget *>(QString(), Qt::FindDirectChildrenOnly);
+    for (QWidget *widget : oldWidgets) {
+        widget->hide();
+        widget->deleteLater();
+    }
     while (QLayoutItem *item = m_filterLayout->takeAt(0)) {
         delete item;
     }
@@ -292,7 +291,15 @@ void MainWindow::rebuildFilterBar()
         button->setStyleSheet(QStringLiteral("QToolButton { border: 2px solid %1; border-radius: 9px; padding: 1px 8px; }"
                                              "QToolButton:checked { background: %1; color: %2; }")
                                   .arg(color.name(), color.lightness() > 150 ? QStringLiteral("black") : QStringLiteral("white")));
-        connect(button, &QToolButton::toggled, this, [this, id = label.id](bool on) {
+        connect(button, &QToolButton::clicked, this, [this, button, id = label.id](bool on) {
+            // With tasks ticked the click labels them (or removes the label
+            // when all of them have it) and leaves the filter alone.
+            const QStringList ticked = currentView()->checkedIds();
+            if (!ticked.isEmpty()) {
+                button->setChecked(m_filter.contains(id));
+                m_store->toggleLabel(ticked, id);
+                return;
+            }
             if (on) {
                 m_filter.insert(id);
             } else {
@@ -309,21 +316,6 @@ void MainWindow::rebuildFilterBar()
     m_filterLayout->addStretch();
     m_filter.intersect(known);
     m_filterBar->setVisible(!m_store->labels().isEmpty());
-}
-
-void MainWindow::rebuildLabelMenu()
-{
-    m_labelMenu->clear();
-    m_labelMenuActions.clear();
-    for (const Label &label : m_store->labels()) {
-        QPixmap swatch(12, 12);
-        swatch.fill(labelPalette().at(label.color));
-        QAction *action = m_labelMenu->addAction(QIcon(swatch), label.name);
-        m_labelMenuActions.insert(label.id, action);
-        connect(action, &QAction::triggered, this, [this, id = label.id] {
-            m_store->toggleLabel(currentView()->checkedIds(), id);
-        });
-    }
 }
 
 QToolButton *MainWindow::filterButton(const QString &labelId) const
@@ -355,7 +347,6 @@ void MainWindow::updateActions()
     m_cancel->setEnabled(any && state != TaskState::Cancelled);
     m_postpone->setEnabled(any && (state == TaskState::Active || state == TaskState::Postponed));
     m_restore->setEnabled(any && state != TaskState::Active);
-    m_label->setEnabled(any && !m_store->labels().isEmpty());
     m_delete->setEnabled(any);
 }
 
