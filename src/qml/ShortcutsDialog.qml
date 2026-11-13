@@ -18,6 +18,7 @@ QQC2.Dialog {
         {keys: "Shift+Up / Shift+Down", action: i18n("Move the highlight and tick the tasks it passes")},
         {keys: "Space", action: i18n("Tick or untick the highlighted task")},
         {keys: "Ctrl+Up / Ctrl+Down", action: i18n("Move the highlighted task up or down in the list")},
+        {keys: "Ctrl+PgUp / Ctrl+PgDown", action: i18n("Next / previous tab")},
         {keys: "Ctrl+A", action: i18n("Tick all tasks of the tab")},
         {keys: "Ctrl+D", action: i18n("Duplicate the selected tasks")},
         {keys: "Delete", action: i18n("Cancel the selected tasks")},

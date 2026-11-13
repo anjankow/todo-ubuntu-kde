@@ -177,6 +177,37 @@ private Q_SLOTS:
         QVERIFY(store.tasksIn(TaskState::Postponed).isEmpty());
     }
 
+    void returnedTasksAreMarkedUntilDismissedOrChanged()
+    {
+        TodoStore store;
+        const QString a = store.addTask("A");
+        const QString b = store.addTask("B");
+        const QString c = store.addTask("C");
+        const QDateTime now(QDate(2026, 11, 12), QTime(10, 0));
+        QVERIFY(!store.nextPostponedTime().isValid());
+        store.postpone({a, b}, now.addDays(1));
+        store.postpone({c}, now.addSecs(30));
+        QCOMPARE(store.nextPostponedTime(), now.addSecs(30));
+
+        QCOMPARE(store.releaseDuePostponed(now.addSecs(31)), 1);
+        QVERIFY(store.task(c)->returned);
+        QCOMPARE(store.task(c)->state, TaskState::Active);
+        QCOMPARE(store.nextPostponedTime(), now.addDays(1));
+        QVERIFY(store.dismissReturned(c));
+        QVERIFY(!store.task(c)->returned);
+        QVERIFY(!store.dismissReturned(c)); // nothing to dismiss
+
+        QCOMPARE(store.releaseDuePostponed(now.addDays(2)), 2);
+        QVERIFY(store.task(a)->returned);
+        store.complete({a}); // any change of the state clears the mark
+        QVERIFY(!store.task(a)->returned);
+        store.postpone({b}, now.addDays(5));
+        QVERIFY(!store.task(b)->returned);
+        store.restore({b}); // restored by hand: not marked
+        QVERIFY(!store.task(b)->returned);
+        QVERIFY(!store.nextPostponedTime().isValid());
+    }
+
     void postponeNeedsAValidTime()
     {
         TodoStore store;

@@ -50,6 +50,8 @@ QVariant TaskListModel::data(const QModelIndex &index, int role) const
         return task.state == TaskState::Postponed ? QLocale().toString(task.postponedUntil, QLocale::ShortFormat) : QString();
     case CheckedRole:
         return m_checked.contains(task.id);
+    case ReturnedRole:
+        return task.returned;
     default:
         return {};
     }
@@ -58,7 +60,7 @@ QVariant TaskListModel::data(const QModelIndex &index, int role) const
 QHash<int, QByteArray> TaskListModel::roleNames() const
 {
     return {{IdRole, "taskId"}, {TitleRole, "title"}, {DescriptionRole, "description"}, {LabelColorsRole, "labelColors"}, {PostponedTextRole, "postponedText"},
-        {CheckedRole, "checked"}};
+        {CheckedRole, "checked"}, {ReturnedRole, "returned"}};
 }
 
 int TaskListModel::totalCount() const

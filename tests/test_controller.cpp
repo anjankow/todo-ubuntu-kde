@@ -441,6 +441,58 @@ private Q_SLOTS:
         QVERIFY(screen.contains(QRect(trayPopupPosition(QRect(QPoint(5, 1075), QSize(1, 1)), popup, screen), popup)));
     }
 
+    // --- bringing postponed tasks back while running ---
+
+    void releaseTimerFollowsTheEarliestPostponedTask()
+    {
+        TestEnv t;
+        QVERIFY(!t.app->releaseTimerActive());
+        const QString a = t.add("A");
+        const QString b = t.add("B");
+        t.app->postponeUntil({a}, fixedNow.addSecs(90));
+        QVERIFY(t.app->releaseTimerActive()); // set when a task is postponed
+        QCOMPARE(t.app->nextReleaseAt(), fixedNow.addSecs(90));
+        QCOMPARE(t.app->releaseTimerInterval(), 90 * 1000);
+        t.app->postponeUntil({b}, fixedNow.addDays(3)); // far away: looks again after a while
+        QCOMPARE(t.app->releaseTimerInterval(), 90 * 1000);
+        t.store()->restore({a});
+        QCOMPARE(t.app->releaseTimerInterval(), AppController::maxReleaseWaitMs);
+
+        t.now = fixedNow.addDays(3);
+        t.app->releaseDue();
+        QCOMPARE(t.shown(), QStringList({"A", "B"}));
+        QVERIFY(t.store()->task(b)->returned);
+        QVERIFY(!t.app->releaseTimerActive()); // nothing postponed any more
+        QCOMPARE(t.list()->data(t.list()->index(1), TaskListModel::ReturnedRole).toBool(), true);
+
+        t.app->dismissReturned(b);
+        QVERIFY(!t.store()->task(b)->returned);
+        QCOMPARE(t.savedTitles(), QStringList({"A", "B"}));
+    }
+
+    void timerIsSetWhenTheApplicationStarts()
+    {
+        TestEnv t;
+        const QString a = t.add("A");
+        t.app->postponeUntil({a}, fixedNow.addSecs(30));
+        t.open();
+        QVERIFY(t.app->releaseTimerActive());
+        QCOMPARE(t.app->releaseTimerInterval(), 30 * 1000);
+    }
+
+    void postponedTaskComesBackAtItsTimeWhileRunning()
+    {
+        QTemporaryDir dir;
+        const QString config = dir.filePath("kdetodorc");
+        Settings(config).setStorageDir(dir.path());
+        AppController app(config); // the real clock
+        const QString a = app.store()->addTask("A");
+        app.postponeUntil({a}, QDateTime::currentDateTime().addMSecs(300));
+        QCOMPARE(app.store()->task(a)->state, TaskState::Postponed);
+        QTRY_COMPARE_WITH_TIMEOUT(app.store()->task(a)->state, TaskState::Active, 5000);
+        QVERIFY(app.store()->task(a)->returned);
+    }
+
     // --- highlight ---
 
     void highlightMovesWithArrowsAndCanBeCleared()

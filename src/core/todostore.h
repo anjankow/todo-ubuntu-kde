@@ -42,8 +42,13 @@ public:
     // of the list as an active task. Returns the ids of the copies.
     QStringList duplicate(const QStringList &ids);
 
-    // Moves postponed tasks whose time has come back to the active list.
+    // Moves postponed tasks whose time has come back to the active list and
+    // marks them as returned.
     int releaseDuePostponed(const QDateTime &now);
+    // The earliest time a postponed task comes back; invalid when none is postponed.
+    QDateTime nextPostponedTime() const;
+    // Takes the returned mark off a task.
+    bool dismissReturned(const QString &id);
 
     // Reorders the given tasks among themselves: the slots they occupy in
     // the full list are refilled in the order given.

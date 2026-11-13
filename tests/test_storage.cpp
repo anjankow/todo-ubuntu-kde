@@ -66,6 +66,23 @@ private Q_SLOTS:
         QCOMPARE(loaded.label(work)->color, 7);
     }
 
+    void returnedMarkIsKept()
+    {
+        QTemporaryDir dir;
+        const QString path = Storage::filePath(dir.path());
+        TodoStore store;
+        const QString a = store.addTask("A");
+        const QString b = store.addTask("B");
+        store.postpone({a}, QDateTime(QDate(2026, 1, 1), QTime(8, 0)));
+        store.releaseDuePostponed(QDateTime(QDate(2026, 1, 2), QTime(8, 0)));
+        QVERIFY(Storage::save(store, path));
+
+        TodoStore loaded;
+        QVERIFY(Storage::load(loaded, path));
+        QVERIFY(loaded.task(a)->returned);
+        QVERIFY(!loaded.task(b)->returned);
+    }
+
     void missingFileGivesEmptyList()
     {
         QTemporaryDir dir;

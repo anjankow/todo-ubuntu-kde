@@ -12,6 +12,9 @@ struct Task {
     QString description;
     TaskState state = TaskState::Active;
     QDateTime postponedUntil; // only meaningful when state == Postponed
+    // Came back by itself from Postponed and the user has not looked at it
+    // yet. Cleared by dismissing it or by any change of the state.
+    bool returned = false;
     QStringList labelIds;
 };
 

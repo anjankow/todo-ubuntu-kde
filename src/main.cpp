@@ -1,6 +1,7 @@
 #include "app/appcontroller.h"
 #include "app/application.h"
 #include "app/trayicon.h"
+#include "core/console.h"
 
 #include <KAboutData>
 #include <KDBusService>
@@ -8,6 +9,7 @@
 
 #include <QApplication>
 #include <QCommandLineParser>
+#include <QDir>
 #include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickWindow>
@@ -16,6 +18,8 @@
 
 int main(int argc, char **argv)
 {
+    // First: plugins may already print while the application is created.
+    Console::installMessageRouting();
     Application::prepare();
     // A QApplication: the Plasma style of the controls draws with widgets' styles.
     QApplication app(argc, argv);
@@ -33,6 +37,13 @@ int main(int argc, char **argv)
     about.setupCommandLine(&parser);
     parser.process(app);
     about.processCommandLine(&parser);
+    // After --help / --version had their say on stdout: from now on only the
+    // application's own critical messages reach the terminal.
+    Console::isolate();
+    // Programs and libraries in the process misbehave in a working directory
+    // that was deleted (fontconfig then prints "out of memory"), e.g. when
+    // the application was started from a folder that is gone by now.
+    QDir::setCurrent(QDir::homePath());
 
     // One instance only: starting the application again raises this one.
     // Without a D-Bus session (rare outside a desktop) it still starts.

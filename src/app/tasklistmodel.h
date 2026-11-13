@@ -18,7 +18,7 @@ class TaskListModel : public QAbstractListModel
     Q_PROPERTY(int checkedCount READ checkedCount NOTIFY checkedChanged)
     Q_PROPERTY(QString currentId READ currentId WRITE setCurrentId NOTIFY currentIdChanged)
 public:
-    enum Roles { IdRole = Qt::UserRole + 1, TitleRole, DescriptionRole, LabelColorsRole, PostponedTextRole, CheckedRole };
+    enum Roles { IdRole = Qt::UserRole + 1, TitleRole, DescriptionRole, LabelColorsRole, PostponedTextRole, CheckedRole, ReturnedRole };
 
     TaskListModel(TodoStore *store, TaskState state, QObject *parent = nullptr);
 

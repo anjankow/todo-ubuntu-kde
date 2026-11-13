@@ -104,8 +104,7 @@ QQC2.Dialog {
             IconButton {
                 objectName: "cardComplete"
                 text: i18n("Complete")
-                icon.name: "checkmark"
-                icon.color: Kirigami.Theme.positiveTextColor
+                iconFile: "complete"
                 enabled: card.taskState !== "completed"
                 onClicked: {
                     if (card.save()) {
@@ -118,7 +117,8 @@ QQC2.Dialog {
                 id: cardPostponeButton
                 objectName: "cardPostpone"
                 text: i18n("Postpone")
-                icon.name: "view-calendar"
+                iconFile: "postpone"
+                themed: true
                 enabled: card.taskState === "active" || card.taskState === "postponed"
                 onClicked: cardPostponeMenu.popup(cardPostponeButton, 0, cardPostponeButton.height)
 
@@ -144,7 +144,8 @@ QQC2.Dialog {
             IconButton {
                 objectName: "cardCancelTask"
                 text: i18n("Cancel task")
-                icon.source: "qrc:/qml/icons/cancel.svg"
+                iconFile: "cancel"
+                themed: true
                 enabled: card.taskState !== "cancelled"
                 onClicked: {
                     if (card.save()) {

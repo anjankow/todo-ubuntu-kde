@@ -60,8 +60,11 @@ AppController::AppController(const QString &configFile, Clock clock, QObject *pa
         connect(model, &TaskListModel::currentIdChanged, this, &AppController::actionsChanged);
     }
     m_storageDir = m_settings.storageDir();
+    m_releaseTimer.setSingleShot(true);
+    connect(&m_releaseTimer, &QTimer::timeout, this, &AppController::releaseDue);
     connect(m_store, &TodoStore::changed, this, &AppController::onStoreChanged);
     loadFromDisk();
+    scheduleRelease();
 }
 
 TaskListModel *AppController::model(TaskState state) const
@@ -169,6 +172,7 @@ void AppController::onStoreChanged()
     applyFilter();
     Q_EMIT actionsChanged();
     Q_EMIT topTasksChanged();
+    scheduleRelease(); // a task may have been postponed
 }
 
 void AppController::applyFilter()
@@ -306,6 +310,34 @@ void AppController::postpone(const QStringList &ids, Preset preset)
 void AppController::postponeUntil(const QStringList &ids, const QDateTime &until)
 {
     m_store->postpone(ids, until);
+}
+
+void AppController::dismissReturned(const QString &id)
+{
+    m_store->dismissReturned(id);
+}
+
+QDateTime AppController::nextReleaseAt() const
+{
+    return m_store->nextPostponedTime();
+}
+
+void AppController::releaseDue()
+{
+    if (m_store->releaseDuePostponed(m_clock()) == 0) {
+        scheduleRelease(); // nothing was due yet (an early or capped wake-up)
+    }
+}
+
+void AppController::scheduleRelease()
+{
+    const QDateTime next = m_store->nextPostponedTime();
+    if (!next.isValid()) {
+        m_releaseTimer.stop();
+        return;
+    }
+    const qint64 wait = qBound<qint64>(0, m_clock().msecsTo(next), maxReleaseWaitMs);
+    m_releaseTimer.start(int(wait));
 }
 
 QDateTime AppController::suggestedPostponeTime() const

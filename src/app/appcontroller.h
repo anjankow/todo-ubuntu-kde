@@ -6,6 +6,7 @@
 
 #include <QDateTime>
 #include <QObject>
+#include <QTimer>
 #include <QSet>
 #include <QUrl>
 #include <QVariant>
@@ -99,6 +100,19 @@ public:
     Q_INVOKABLE void postpone(const QStringList &ids, AppController::Preset preset);
     Q_INVOKABLE void postponeUntil(const QStringList &ids, const QDateTime &until);
     Q_INVOKABLE QDateTime suggestedPostponeTime() const;
+    // The returned mark (alarm icon) of a task that came back from Postponed.
+    Q_INVOKABLE void dismissReturned(const QString &id);
+
+    // While the application runs, postponed tasks come back at their time:
+    // a timer is set for the earliest one whenever the tasks change.
+    QDateTime nextReleaseAt() const;
+    bool releaseTimerActive() const { return m_releaseTimer.isActive(); }
+    int releaseTimerInterval() const { return m_releaseTimer.interval(); }
+    // What the timer does: brings back every postponed task that is due.
+    Q_INVOKABLE void releaseDue();
+    // The timer never waits longer than this before it looks again (a
+    // suspended computer or a changed clock would otherwise delay it).
+    static constexpr int maxReleaseWaitMs = 5 * 60 * 1000;
 
     // --- toolbar and keyboard: act on the selected tasks of the current
     // tab, which are the ticked tasks or, when none is ticked, the
@@ -137,6 +151,7 @@ private:
     void save();
     void onStoreChanged();
     void applyFilter();
+    void scheduleRelease();
     bool hasSelection() const;
     void setError(const QString &message);
 
@@ -150,4 +165,5 @@ private:
     QSet<QString> m_filter;
     QString m_error;
     bool m_keepRunningInTray = false;
+    QTimer m_releaseTimer;
 };
