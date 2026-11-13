@@ -33,34 +33,44 @@ QQC2.Dialog {
     title: i18n("Keyboard shortcuts")
     standardButtons: QQC2.Dialog.Close
 
-    // The grid gets its width from the dialog and only hands its height back:
-    // used directly as the content, the wrapping labels would make the
-    // dialog's size depend on itself (a binding loop).
+    // Plain items with explicit widths instead of a layout: a layout of
+    // wrapping labels asks for its height while it hands out the widths,
+    // which is a binding loop whenever the dialog's width changes (the
+    // window is resized).
     contentItem: Item {
-        implicitHeight: grid.implicitHeight
+        id: content
 
-        GridLayout {
-            id: grid
-            width: parent.width
-            columns: 2
-            columnSpacing: Kirigami.Units.largeSpacing
-            rowSpacing: Kirigami.Units.smallSpacing
+        readonly property int keyWidth: Kirigami.Units.gridUnit * 11
+        implicitHeight: rows.height
+
+        Column {
+            id: rows
+            width: content.width
+            spacing: Kirigami.Units.smallSpacing
 
             Repeater {
-                model: dialog.shortcuts.length * 2
+                model: dialog.shortcuts
 
-                QQC2.Label {
-                    readonly property var entry: dialog.shortcuts[Math.floor(index / 2)]
-                    readonly property bool isKey: index % 2 === 0
+                Item {
+                    width: rows.width
+                    height: Math.max(keys.implicitHeight, action.implicitHeight)
 
-                    objectName: isKey ? "shortcutKeys-" + Math.floor(index / 2) : "shortcutAction-" + Math.floor(index / 2)
-                    Layout.fillWidth: !isKey
-                    // Wrapping text needs a width that does not come from itself.
-                    Layout.preferredWidth: isKey ? -1 : 1
-                    Layout.alignment: Qt.AlignTop
-                    text: isKey ? entry.keys : entry.action
-                    font.bold: isKey
-                    wrapMode: isKey ? Text.NoWrap : Text.Wrap
+                    QQC2.Label {
+                        id: keys
+                        objectName: "shortcutKeys-" + index
+                        width: content.keyWidth
+                        text: modelData.keys
+                        font.bold: true
+                        wrapMode: Text.Wrap
+                    }
+                    QQC2.Label {
+                        id: action
+                        objectName: "shortcutAction-" + index
+                        x: content.keyWidth + Kirigami.Units.largeSpacing
+                        width: parent.width - x
+                        text: modelData.action
+                        wrapMode: Text.Wrap
+                    }
                 }
             }
         }
