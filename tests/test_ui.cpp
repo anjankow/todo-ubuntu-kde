@@ -1066,7 +1066,13 @@ private Q_SLOTS:
         // The Postponed tab shows all state buttons.
         ui.click("tab-postponed");
         QTRY_COMPARE(ui.app->currentTab(), int(AppController::PostponedTab));
-        const QStringList buttons = {"completeButton", "postponeButton", "cancelButton", "deleteButton", "restoreButton", "settingsButton"};
+        QTRY_VERIFY(ui.item("restoreButton")->isVisible());
+        QVERIFY(QTest::qWaitForWindowExposed(ui.window));
+        QTest::qWait(50); // the row lays out the buttons that just became visible
+        const QStringList buttons = {"completeButton", "postponeButton", "cancelButton", "deleteButton", "restoreButton"};
+        QQuickItem *settings = ui.item("settingsButton"); // alone in the bar at the top
+        QVERIFY(settings && settings->isVisible());
+        QVERIFY(settings->mapRectToScene(QRectF(0, 0, settings->width(), settings->height())).right() <= ui.window->width());
         qreal previousRight = 0;
         for (const QString &name : buttons) {
             QQuickItem *button = ui.item(name);
