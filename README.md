@@ -36,7 +36,7 @@ icon's context menu. Only one instance runs: starting the app again brings its w
 
 ## Keyboard shortcuts
 
-The list is also in the app: *Settings* (gear button) → *Keyboard shortcuts…*.
+The list is also in the app: *Settings* (the button at the right end of the toolbar) → *Keyboard shortcuts…*.
 "Selected" means the ticked tasks or, when none is ticked, the highlighted task.
 
 | Key | Action |
