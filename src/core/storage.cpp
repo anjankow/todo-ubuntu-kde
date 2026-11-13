@@ -72,6 +72,9 @@ bool Storage::save(const TodoStore &store, const QString &path, QString *error)
         if (t.state == TaskState::Postponed) {
             o.insert(QStringLiteral("postponedUntil"), t.postponedUntil.toString(Qt::ISODate));
         }
+        if (t.returned) {
+            o.insert(QStringLiteral("returned"), true);
+        }
         tasks.append(o);
     }
     const QJsonObject root {{QStringLiteral("version"), 1}, {QStringLiteral("labels"), labels}, {QStringLiteral("tasks"), tasks}};
@@ -143,6 +146,7 @@ bool Storage::load(TodoStore &store, const QString &path, QString *error)
         if (t.state == TaskState::Postponed) {
             t.postponedUntil = QDateTime::fromString(o.value(QStringLiteral("postponedUntil")).toString(), Qt::ISODate);
         }
+        t.returned = t.state == TaskState::Active && o.value(QStringLiteral("returned")).toBool();
         const QJsonArray taskLabels = o.value(QStringLiteral("labels")).toArray();
         for (const QJsonValue &lv : taskLabels) {
             const QString labelId = lv.toString();

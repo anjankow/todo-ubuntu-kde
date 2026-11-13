@@ -28,7 +28,7 @@ QQC2.ScrollView {
 
             readonly property bool highlighted: scroll.taskModel.currentId === model.taskId
             // the pointer is over the task (or over its quick-complete button)
-            readonly property bool hovered: mouse.containsMouse || quickComplete.hovered
+            readonly property bool hovered: mouse.containsMouse || quickComplete.hovered || returnedMark.hovered
 
             width: list.width
             height: content.implicitHeight + Kirigami.Units.largeSpacing * 2
@@ -105,6 +105,11 @@ QQC2.ScrollView {
                     font.family: Kirigami.Theme.defaultFont.family
                     font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
                 }
+                // Room for the alarm icon and the quick-complete checkmark.
+                Item {
+                    visible: model.returned
+                    implicitWidth: returnedMark.width + quickComplete.width + Kirigami.Units.smallSpacing
+                }
                 Text {
                     visible: model.postponedText !== ""
                     text: i18n("until %1", model.postponedText)
@@ -115,14 +120,36 @@ QQC2.ScrollView {
                 }
             }
 
+            // A postponed task that came back by itself: stays until it is
+            // clicked or the task changes its state (also after a restart).
+            QQC2.ToolButton {
+                id: returnedMark
+                objectName: "returned-" + model.taskId
+                anchors.right: quickComplete.left
+                anchors.rightMargin: Kirigami.Units.smallSpacing
+                anchors.verticalCenter: parent.verticalCenter
+                visible: model.returned
+                focusPolicy: Qt.NoFocus
+                display: QQC2.AbstractButton.IconOnly
+                text: i18n("Back from Postponed: time to do it")
+                icon.source: "qrc:/qml/icons/alarm.svg"
+                QQC2.ToolTip.text: text
+                QQC2.ToolTip.visible: hovered
+                QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
+                onClicked: app.dismissReturned(model.taskId)
+            }
+
             // Quick complete: shown over the end of the title while hovering.
+            // Hidden with opacity: it keeps its place for the alarm icon.
             QQC2.RoundButton {
                 id: quickComplete
                 objectName: "complete-" + model.taskId
                 anchors.right: parent.right
                 anchors.rightMargin: Kirigami.Units.smallSpacing
                 anchors.verticalCenter: parent.verticalCenter
-                visible: scroll.mainList && row.hovered
+                visible: scroll.mainList
+                opacity: row.hovered ? 1 : 0
+                enabled: row.hovered
                 focusPolicy: Qt.NoFocus
                 icon.name: "checkmark"
                 icon.color: Kirigami.Theme.positiveTextColor

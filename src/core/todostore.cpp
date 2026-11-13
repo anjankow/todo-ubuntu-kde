@@ -152,6 +152,7 @@ void TodoStore::setState(const QStringList &ids, TaskState state, const QDateTim
         }
         m_tasks[i].state = state;
         m_tasks[i].postponedUntil = state == TaskState::Postponed ? until : QDateTime();
+        m_tasks[i].returned = false;
         any = true;
     }
     if (any) {
@@ -226,8 +227,40 @@ int TodoStore::releaseDuePostponed(const QDateTime &now)
             due.append(t.id);
         }
     }
-    restore(due);
+    if (due.isEmpty()) {
+        return 0;
+    }
+    for (Task &t : m_tasks) {
+        if (due.contains(t.id)) {
+            t.state = TaskState::Active;
+            t.postponedUntil = QDateTime();
+            t.returned = true;
+        }
+    }
+    Q_EMIT changed();
     return due.size();
+}
+
+QDateTime TodoStore::nextPostponedTime() const
+{
+    QDateTime next;
+    for (const Task &t : m_tasks) {
+        if (t.state == TaskState::Postponed && t.postponedUntil.isValid() && (!next.isValid() || t.postponedUntil < next)) {
+            next = t.postponedUntil;
+        }
+    }
+    return next;
+}
+
+bool TodoStore::dismissReturned(const QString &id)
+{
+    const int i = indexOf(id);
+    if (i < 0 || !m_tasks.at(i).returned) {
+        return false;
+    }
+    m_tasks[i].returned = false;
+    Q_EMIT changed();
+    return true;
 }
 
 bool TodoStore::reorder(const QStringList &idsInNewOrder)

@@ -13,13 +13,17 @@ Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
 - **Task card** – double-click a task (or press `Enter` / `Shift+Enter` on the highlighted one) to see and edit
   title, description and labels, or to complete, postpone or cancel the task.
 - **Quick complete** – hover a task and click the green checkmark at the end of its line.
-- **Select** – tick the checkbox of one or more tasks (`Ctrl+A` ticks all), then use the toolbar:
+- **Select** – tick the checkbox of one or more tasks (`Ctrl+A` ticks all), then use the buttons
+  between the input and the list:
   *Complete* (green checkmark), *Postpone* (calendar), *Cancel task* (gray cross), *Delete* (red bin)
   and *Restore* (arrow). The buttons show only icons; hover one to see its name.
-  With nothing ticked, the toolbar acts on the highlighted task.
+  With nothing ticked, they act on the highlighted task. In a dark colour scheme the calendar and
+  the cross turn light; the checkmark stays green and the bin red.
   Deleting several tasks at once asks for confirmation; deletion is permanent.
 - **Postpone** – until tomorrow, 3 days, 1 week, 1 month or a custom date and time.
-  Postponed tasks return to the list when the app is opened after that time.
+  A postponed task returns to the list at that time while the app runs (also in the tray),
+  or when the app is opened next. It then shows a yellow alarm icon until you click the icon
+  or the task changes its state; the icon is kept when the app is closed and reopened.
 - **Tabs** – *Tasks*, *Postponed*, *Completed*, *Cancelled*.
 - **Reorder** – drag a task by its handle, or `Ctrl+Up` / `Ctrl+Down` on the highlighted task.
 - **Labels** – *Settings* → *Labels…* defines labels (name + one of 12 colors).
@@ -56,6 +60,7 @@ The list is also in the app: *Settings* (the button at the right end of the tool
 | `Shift+Up` / `Shift+Down` | Move the highlight and tick the tasks it passes (never unticks) |
 | `Space` | Tick or untick the highlighted task |
 | `Ctrl+Up` / `Ctrl+Down` | Move the highlighted task up / down in the list |
+| `Ctrl+PgUp` / `Ctrl+PgDown` | Next / previous tab (wraps around) |
 | `Ctrl+A` | Tick all tasks of the current tab |
 | `Ctrl+D` | Duplicate the selected tasks (copies go to the bottom of the Tasks list) |
 | `Delete` | Cancel the selected tasks |

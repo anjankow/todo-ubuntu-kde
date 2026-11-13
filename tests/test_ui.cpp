@@ -14,6 +14,12 @@
 
 namespace
 {
+QByteArray readFile(const QString &path)
+{
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+}
+
 QQuickItem *findItem(QQuickItem *parent, const QString &name, bool visibleOnly)
 {
     if (visibleOnly && !parent->isVisible()) {
@@ -864,10 +870,12 @@ private Q_SLOTS:
         const QString b = ui.add("B");
         QQuickItem *button = ui.item("complete-" + a);
         QVERIFY(button);
-        QVERIFY(!button->isVisible());
+        QCOMPARE(button->opacity(), 0.0); // hidden, but it keeps its place
+        QVERIFY(!button->isEnabled());
         ui.hover(a);
-        QTRY_VERIFY(button->isVisible());
-        QVERIFY(!ui.item("complete-" + b)->isVisible()); // only on the hovered task
+        QTRY_COMPARE(button->opacity(), 1.0);
+        QVERIFY(button->isEnabled());
+        QCOMPARE(ui.item("complete-" + b)->opacity(), 0.0); // only on the hovered task
 
         // It sits at the end of the line, over the title.
         QQuickItem *row = ui.row(a);
@@ -1054,8 +1062,8 @@ private Q_SLOTS:
             const char *iconSource;
         };
         const QList<Expected> buttons = {
-            {"completeButton", "Complete", "checkmark", ""},
-            {"postponeButton", "Postpone", "view-calendar", ""},
+            {"completeButton", "Complete", "", "qrc:/qml/icons/complete.svg"},
+            {"postponeButton", "Postpone", "", "qrc:/qml/icons/postpone.svg"},
             {"cancelButton", "Cancel task", "", "qrc:/qml/icons/cancel.svg"},
             {"deleteButton", "Delete", "", "qrc:/qml/icons/delete.svg"},
             {"restoreButton", "Restore", "edit-undo", ""},
@@ -1069,8 +1077,9 @@ private Q_SLOTS:
             QCOMPARE(ui.buttonIcon(e.button, "name").toString(), QString(e.iconName));
             QCOMPARE(ui.buttonIcon(e.button, "source").toUrl().toString(), QString(e.iconSource));
         }
-        // The checkmark is green; the bin and the cross bring their own red and gray.
-        QCOMPARE(ui.buttonIcon("completeButton", "color").value<QColor>(), QColor("#27ae60"));
+        // The bundled icons bring their colours: green checkmark, red bin.
+        QVERIFY(readFile(":/qml/icons/complete.svg").contains("#27ae60"));
+        QVERIFY(readFile(":/qml/icons/delete.svg").contains("#da4453"));
         // The text is shown as the hover hint (IconButton binds the tool tip to
         // it); hovering toolbar buttons is not delivered on the test platform.
     }
@@ -1085,8 +1094,8 @@ private Q_SLOTS:
             QCOMPARE(ui.item(name)->property("display").toInt(), 0); // IconOnly
         }
         QCOMPARE(ui.item("cardComplete")->property("text").toString(), QString("Complete"));
-        QCOMPARE(ui.buttonIcon("cardComplete", "name").toString(), QString("checkmark"));
-        QCOMPARE(ui.buttonIcon("cardPostpone", "name").toString(), QString("view-calendar"));
+        QCOMPARE(ui.buttonIcon("cardComplete", "source").toUrl().toString(), QString("qrc:/qml/icons/complete.svg"));
+        QCOMPARE(ui.buttonIcon("cardPostpone", "source").toUrl().toString(), QString("qrc:/qml/icons/postpone.svg"));
         QCOMPARE(ui.buttonIcon("cardCancelTask", "source").toUrl().toString(), QString("qrc:/qml/icons/cancel.svg"));
     }
 
@@ -1100,8 +1109,8 @@ private Q_SLOTS:
         for (int i = 0; ui.item(QString("shortcutKeys-%1").arg(i)); ++i) {
             keys.append(ui.item(QString("shortcutKeys-%1").arg(i))->property("text").toString());
         }
-        for (const char *key : {"Shift+Enter", "Enter", "Esc", "Esc Esc", "Up / Down", "Shift+Up / Shift+Down", "Space", "Ctrl+Up / Ctrl+Down", "Ctrl+A",
-                 "Ctrl+D", "Delete", "Shift+Delete", "Ctrl+Q"}) {
+        for (const char *key : {"Shift+Enter", "Enter", "Esc", "Esc Esc", "Up / Down", "Shift+Up / Shift+Down", "Space", "Ctrl+Up / Ctrl+Down",
+                 "Ctrl+PgUp / Ctrl+PgDown", "Ctrl+A", "Ctrl+D", "Delete", "Shift+Delete", "Ctrl+Q"}) {
             QVERIFY2(keys.contains(key), key);
         }
         QMetaObject::invokeMethod(ui.object("shortcutsDialog"), "close");
@@ -1114,6 +1123,131 @@ private Q_SLOTS:
         QVERIFY(ui.item("settingsButton"));
         QVERIFY(!ui.item("labelsButton")); // no separate buttons any more
         QVERIFY(!ui.item("storageButton"));
+    }
+
+    void stateIconsFollowTheColourScheme()
+    {
+        Ui ui;
+        QQuickItem *postpone = ui.item("postponeButton");
+        QQuickItem *cancel = ui.item("cancelButton");
+        QCOMPARE(postpone->property("darkTheme").toBool(), false); // the test platform is light
+        // A dark scheme (light text) switches to the light icons; the
+        // checkmark and the bin keep their colours.
+        postpone->setProperty("darkTheme", true);
+        QCOMPARE(ui.buttonIcon("postponeButton", "source").toUrl().toString(), QString("qrc:/qml/icons/postpone-on-dark.svg"));
+        cancel->setProperty("darkTheme", true);
+        QCOMPARE(ui.buttonIcon("cancelButton", "source").toUrl().toString(), QString("qrc:/qml/icons/cancel-on-dark.svg"));
+        ui.item("completeButton")->setProperty("darkTheme", true);
+        QCOMPARE(ui.buttonIcon("completeButton", "source").toUrl().toString(), QString("qrc:/qml/icons/complete.svg"));
+        ui.item("deleteButton")->setProperty("darkTheme", true);
+        QCOMPARE(ui.buttonIcon("deleteButton", "source").toUrl().toString(), QString("qrc:/qml/icons/delete.svg"));
+        for (const char *file : {"postpone-on-dark", "cancel-on-dark", "postpone", "cancel", "alarm"}) {
+            QVERIFY2(!readFile(QString(":/qml/icons/%1.svg").arg(file)).isEmpty(), file);
+        }
+    }
+
+    void stateButtonsAreBelowTheInputOnEveryTab()
+    {
+        Ui ui;
+        ui.add("A");
+        QQuickItem *input = ui.input();
+        QQuickItem *row = ui.item("stateRow");
+        QVERIFY(row);
+        const qreal inputBottom = input->mapToScene(QPointF(0, input->height())).y();
+        const qreal rowTop = row->mapToScene(QPointF(0, 0)).y();
+        const qreal rowBottom = rowTop + row->height();
+        const qreal listTop = ui.item("activeList")->mapToScene(QPointF(0, 0)).y();
+        QVERIFY(rowTop >= inputBottom);
+        QVERIFY(listTop >= rowBottom);
+        // The toolbar at the top holds only Settings.
+        const qreal settingsBottom = ui.item("settingsButton")->mapToScene(QPointF(0, ui.item("settingsButton")->height())).y();
+        QVERIFY(settingsBottom <= input->mapToScene(QPointF(0, 0)).y());
+
+        ui.click("tab-completed"); // other tabs have no input, the buttons stay
+        QTRY_VERIFY(!input->isVisible());
+        QVERIFY(ui.item("completeButton")->isVisible());
+        const qreal listTop2 = ui.item("completedList")->mapToScene(QPointF(0, 0)).y();
+        QVERIFY(listTop2 >= ui.item("stateRow")->mapToScene(QPointF(0, ui.item("stateRow")->height())).y());
+    }
+
+    void ctrlPageUpAndDownSwitchTabsAndWrap()
+    {
+        Ui ui;
+        QCOMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
+        QCOMPARE(ui.app->currentTab(), int(AppController::PostponedTab));
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
+        QCOMPARE(ui.app->currentTab(), int(AppController::CancelledTab));
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier); // wraps to the first
+        QCOMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
+        ui.key(Qt::Key_PageDown, Qt::ControlModifier); // and back to the last
+        QCOMPARE(ui.app->currentTab(), int(AppController::CancelledTab));
+        ui.key(Qt::Key_PageDown, Qt::ControlModifier);
+        QCOMPARE(ui.app->currentTab(), int(AppController::CompletedTab));
+        ui.key(Qt::Key_PageDown); // without Ctrl: nothing
+        QCOMPARE(ui.app->currentTab(), int(AppController::CompletedTab));
+
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
+        QCOMPARE(ui.app->currentTab(), int(AppController::ActiveTab));
+        ui.focusInput(); // also while typing a task
+        ui.type("draft");
+        ui.key(Qt::Key_PageUp, Qt::ControlModifier);
+        QCOMPARE(ui.app->currentTab(), int(AppController::PostponedTab));
+        QTRY_VERIFY(ui.listHasFocus());
+    }
+
+    // --- tasks back from Postponed ---
+
+    void returnedTaskShowsAlarmUntilClicked()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        ui.app->postponeUntil({a}, fixedNow.addSecs(60));
+        ui.now = fixedNow.addSecs(61);
+        ui.app->releaseDue(); // what the timer does at the time
+        QCOMPARE(ui.shown(), QStringList({"A", "B"}));
+        QTRY_VERIFY(ui.row(a));
+        QQuickItem *alarm = ui.item("returned-" + a);
+        QVERIFY(alarm);
+        QVERIFY(alarm->isVisible()); // without hovering
+        QVERIFY(!ui.item("returned-" + b)->isVisible());
+        QCOMPARE(QQmlProperty::read(alarm, "icon.source").toUrl().toString(), QString("qrc:/qml/icons/alarm.svg"));
+        QCOMPARE(alarm->property("text").toString(), QString("Back from Postponed: time to do it"));
+
+        // Left of the place of the quick-complete checkmark.
+        QQuickItem *check = ui.item("complete-" + a);
+        QVERIFY(alarm->mapToScene(QPointF(alarm->width(), 0)).x() <= check->mapToScene(QPointF(0, 0)).x());
+
+        ui.restart(); // it stays after a restart
+        QTRY_VERIFY(ui.item("returned-" + a));
+        QVERIFY(ui.item("returned-" + a)->isVisible());
+
+        ui.click("returned-" + a);
+        QTRY_VERIFY(!ui.item("returned-" + a)->isVisible());
+        QVERIFY(!ui.store()->task(a)->returned);
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Active); // only the mark goes
+        ui.restart();
+        QTRY_VERIFY(ui.row(a));
+        QVERIFY(!ui.item("returned-" + a)->isVisible());
+    }
+
+    void alarmGoesWhenTheTaskChangesState()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        ui.app->postponeUntil({a}, fixedNow.addSecs(60));
+        ui.now = fixedNow.addSecs(61);
+        ui.restart(); // came back when the application started
+        QTRY_VERIFY(ui.row(a));
+        QVERIFY(ui.item("returned-" + a)->isVisible());
+        ui.app->complete({a});
+        QVERIFY(!ui.store()->task(a)->returned);
+        ui.store()->restore({a});
+        QTRY_VERIFY(ui.row(a));
+        QVERIFY(!ui.item("returned-" + a)->isVisible()); // restored by hand: no alarm
     }
 
     void thereIsNoMenuBarOrHelpMenu()

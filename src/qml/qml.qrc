@@ -10,7 +10,12 @@
         <file>TaskCard.qml</file>
         <file>TaskList.qml</file>
         <file>TrayPopup.qml</file>
+        <file>icons/alarm.svg</file>
         <file>icons/cancel.svg</file>
+        <file>icons/cancel-on-dark.svg</file>
+        <file>icons/complete.svg</file>
+        <file>icons/postpone.svg</file>
+        <file>icons/postpone-on-dark.svg</file>
         <file>icons/delete.svg</file>
     </qresource>
 </RCC>

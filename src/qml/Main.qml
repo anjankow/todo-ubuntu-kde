@@ -8,8 +8,7 @@ Kirigami.ApplicationWindow {
     id: root
 
     title: i18n("Todo")
-    // Wide enough for every toolbar button.
-    width: Math.max(Kirigami.Units.gridUnit * 30, toolBar.implicitWidth + Kirigami.Units.largeSpacing * 4)
+    width: Kirigami.Units.gridUnit * 30
     height: Kirigami.Units.gridUnit * 36
 
     pageStack.globalToolBar.style: Kirigami.ApplicationHeaderStyle.None
@@ -108,6 +107,15 @@ Kirigami.ApplicationWindow {
                 focusInput()
             }
             return true
+        case Qt.Key_PageUp:
+        case Qt.Key_PageDown:
+            if (!ctrl) {
+                return false
+            }
+            // Ctrl+PgUp: next tab, Ctrl+PgDown: previous tab, both wrap around.
+            app.currentTab = (app.currentTab + (event.key === Qt.Key_PageUp ? 1 : 3)) % 4
+            focusList()
+            return true
         case Qt.Key_Space:
             list.toggleCurrentChecked()
             return true
@@ -152,52 +160,6 @@ Kirigami.ApplicationWindow {
                     anchors.fill: parent
                     spacing: Kirigami.Units.smallSpacing
 
-                    IconButton {
-                        objectName: "completeButton"
-                        text: i18n("Complete")
-                        icon.name: "checkmark"
-                        icon.color: Kirigami.Theme.positiveTextColor
-                        enabled: app.canComplete
-                        onClicked: app.completeSelected()
-                    }
-                    IconButton {
-                        id: postponeButton
-                        objectName: "postponeButton"
-                        text: i18n("Postpone")
-                        icon.name: "view-calendar"
-                        enabled: app.canPostpone
-                        onClicked: postponeMenu.popup(postponeButton, 0, postponeButton.height)
-
-                        PostponeMenu {
-                            id: postponeMenu
-                            objectName: "postponeMenu"
-                            onPresetChosen: app.postponeSelected(preset)
-                            onCustomChosen: postponeDialog.ask(function (until) {
-                                app.postponeSelectedUntil(until)
-                            })
-                        }
-                    }
-                    IconButton {
-                        objectName: "cancelButton"
-                        text: i18n("Cancel task")
-                        icon.source: "qrc:/qml/icons/cancel.svg"
-                        enabled: app.canCancel
-                        onClicked: app.cancelSelected()
-                    }
-                    IconButton {
-                        objectName: "deleteButton"
-                        text: i18n("Delete")
-                        icon.source: "qrc:/qml/icons/delete.svg"
-                        enabled: app.canDelete
-                        onClicked: app.deleteSelected()
-                    }
-                    IconButton {
-                        objectName: "restoreButton"
-                        text: i18n("Restore")
-                        icon.name: "edit-undo"
-                        enabled: app.canRestore
-                        onClicked: app.restoreSelected()
-                    }
                     Item {
                         Layout.fillWidth: true
                     }
@@ -309,79 +271,137 @@ Kirigami.ApplicationWindow {
                 }
             }
 
-            StackLayout {
+            ColumnLayout {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 Layout.margins: Kirigami.Units.largeSpacing
-                currentIndex: app.currentTab
+                spacing: Kirigami.Units.largeSpacing
 
-                ColumnLayout {
-                    spacing: Kirigami.Units.largeSpacing
+                QQC2.TextArea {
+                    id: newTask
+                    objectName: "newTaskInput"
+                    Layout.fillWidth: true
+                    // The input belongs to the Tasks tab.
+                    visible: app.currentTab === 0
+                    wrapMode: TextEdit.Wrap
+                    font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
+                    placeholderText: i18n("New task… (Enter saves, Shift+Enter adds a description)")
 
-                    QQC2.TextArea {
-                        id: newTask
-                        objectName: "newTaskInput"
-                        Layout.fillWidth: true
-                        wrapMode: TextEdit.Wrap
-                        font.pointSize: Kirigami.Theme.defaultFont.pointSize + 2
-                        placeholderText: i18n("New task… (Enter saves, Shift+Enter adds a description)")
-
-                        Keys.onPressed: {
-                            var enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
-                            var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
-                            if (enter && (event.modifiers & Qt.ShiftModifier)) {
-                                insert(cursorPosition, "\n") // the description starts on the next line
-                                event.accepted = true
-                            } else if (enter) {
-                                if (text.trim() !== "") {
-                                    app.addTask(text) // the input keeps the focus for the next task
-                                }
-                                clear()
-                                event.accepted = true
-                            } else if (event.key === Qt.Key_Escape
-                                       || (ctrl && (event.key === Qt.Key_Up || event.key === Qt.Key_Down))
-                                       || (text.length === 0 && (event.key === Qt.Key_Up || event.key === Qt.Key_Down))) {
-                                // These leave the input for the task list.
-                                if (root.taskKey(event)) {
-                                    event.accepted = true
-                                }
+                    Keys.onPressed: {
+                        var enter = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                        var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
+                        if (enter && (event.modifiers & Qt.ShiftModifier)) {
+                            insert(cursorPosition, "\n") // the description starts on the next line
+                            event.accepted = true
+                        } else if (enter) {
+                            if (text.trim() !== "") {
+                                app.addTask(text) // the input keeps the focus for the next task
                             }
-                        }
-                        // A cleared draft is dropped; unfinished text stays as a draft.
-                        onActiveFocusChanged: {
-                            if (!activeFocus && text.trim() === "") {
-                                clear()
+                            clear()
+                            event.accepted = true
+                        } else if (event.key === Qt.Key_Escape
+                                   || (ctrl && (event.key === Qt.Key_Up || event.key === Qt.Key_Down
+                                                || event.key === Qt.Key_PageUp || event.key === Qt.Key_PageDown))
+                                   || (text.length === 0 && (event.key === Qt.Key_Up || event.key === Qt.Key_Down))) {
+                            // These leave the input for the task list.
+                            if (root.taskKey(event)) {
+                                event.accepted = true
                             }
                         }
                     }
+                    // A cleared draft is dropped; unfinished text stays as a draft.
+                    onActiveFocusChanged: {
+                        if (!activeFocus && text.trim() === "") {
+                            clear()
+                        }
+                    }
+                }
+
+                // The state buttons: below the input, above the list.
+                RowLayout {
+                    id: stateRow
+                    objectName: "stateRow"
+                    spacing: Kirigami.Units.smallSpacing
+
+                    IconButton {
+                        objectName: "completeButton"
+                        text: i18n("Complete")
+                        iconFile: "complete"
+                        enabled: app.canComplete
+                        onClicked: app.completeSelected()
+                    }
+                    IconButton {
+                        id: postponeButton
+                        objectName: "postponeButton"
+                        text: i18n("Postpone")
+                        iconFile: "postpone"
+                        themed: true
+                        enabled: app.canPostpone
+                        onClicked: postponeMenu.popup(postponeButton, 0, postponeButton.height)
+
+                        PostponeMenu {
+                            id: postponeMenu
+                            objectName: "postponeMenu"
+                            onPresetChosen: app.postponeSelected(preset)
+                            onCustomChosen: postponeDialog.ask(function (until) {
+                                app.postponeSelectedUntil(until)
+                            })
+                        }
+                    }
+                    IconButton {
+                        objectName: "cancelButton"
+                        text: i18n("Cancel task")
+                        iconFile: "cancel"
+                        themed: true
+                        enabled: app.canCancel
+                        onClicked: app.cancelSelected()
+                    }
+                    IconButton {
+                        objectName: "deleteButton"
+                        text: i18n("Delete")
+                        iconFile: "delete"
+                        enabled: app.canDelete
+                        onClicked: app.deleteSelected()
+                    }
+                    IconButton {
+                        objectName: "restoreButton"
+                        text: i18n("Restore")
+                        icon.name: "edit-undo"
+                        enabled: app.canRestore
+                        onClicked: app.restoreSelected()
+                    }
+                }
+
+                StackLayout {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    currentIndex: app.currentTab
 
                     TaskList {
                         objectName: "activeList"
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
                         taskModel: app.activeModel
                         mainList: true
                         onOpenRequested: root.openCard(taskId)
                         onRowClicked: root.focusList()
                     }
-                }
-                TaskList {
-                    objectName: "postponedList"
-                    taskModel: app.postponedModel
-                    onOpenRequested: root.openCard(taskId)
-                    onRowClicked: root.focusList()
-                }
-                TaskList {
-                    objectName: "completedList"
-                    taskModel: app.completedModel
-                    onOpenRequested: root.openCard(taskId)
-                    onRowClicked: root.focusList()
-                }
-                TaskList {
-                    objectName: "cancelledList"
-                    taskModel: app.cancelledModel
-                    onOpenRequested: root.openCard(taskId)
-                    onRowClicked: root.focusList()
+                    TaskList {
+                        objectName: "postponedList"
+                        taskModel: app.postponedModel
+                        onOpenRequested: root.openCard(taskId)
+                        onRowClicked: root.focusList()
+                    }
+                    TaskList {
+                        objectName: "completedList"
+                        taskModel: app.completedModel
+                        onOpenRequested: root.openCard(taskId)
+                        onRowClicked: root.focusList()
+                    }
+                    TaskList {
+                        objectName: "cancelledList"
+                        taskModel: app.cancelledModel
+                        onOpenRequested: root.openCard(taskId)
+                        onRowClicked: root.focusList()
+                    }
                 }
             }
         }

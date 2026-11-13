@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+  <!-- Yellow alarm clock: a postponed task is due again. -->
+  <g fill="none" stroke="#f0b400" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="11" cy="12" r="6.5"/>
+    <path d="M11 8.5 V12 L13.5 13.5"/>
+    <path d="M3.5 6 L6.5 3.5 M18.5 6 L15.5 3.5"/>
+    <path d="M6.5 18.5 L5 20 M15.5 18.5 L17 20"/>
+  </g>
+</svg>
