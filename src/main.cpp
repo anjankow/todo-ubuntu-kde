@@ -31,7 +31,7 @@ int main(int argc, char **argv)
     about.addAuthor(QStringLiteral("anjankow"), QString(), QStringLiteral("anjankow@protonmail.com"));
     about.setDesktopFileName(QStringLiteral("org.anjankow.kdetodo"));
     KAboutData::setApplicationData(about);
-    QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("org.anjankow.kdetodo"), QIcon::fromTheme(QStringLiteral("view-task"))));
+    QApplication::setWindowIcon(QIcon::fromTheme(QStringLiteral("org.anjankow.kdetodo"), QIcon(QStringLiteral(":/qml/icons/app.png"))));
 
     QCommandLineParser parser;
     about.setupCommandLine(&parser);

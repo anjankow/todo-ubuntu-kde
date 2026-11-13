@@ -25,7 +25,7 @@ TrayIcon::TrayIcon(QQuickWindow *mainWindow, QQuickWindow *popup, QObject *paren
     : QObject(parent)
     , m_mainWindow(mainWindow)
     , m_popup(popup)
-    , m_icon(new QSystemTrayIcon(QIcon::fromTheme(QStringLiteral("org.anjankow.kdetodo"), QIcon::fromTheme(QStringLiteral("view-task"))), this))
+    , m_icon(new QSystemTrayIcon(QIcon::fromTheme(QStringLiteral("org.anjankow.kdetodo"), QIcon(QStringLiteral(":/qml/icons/app.png"))), this))
     , m_menu(new QMenu)
 {
     m_icon->setToolTip(i18n("Todo"));

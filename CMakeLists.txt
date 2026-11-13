@@ -44,7 +44,10 @@ add_definitions(-DTRANSLATION_DOMAIN="kdetodo" -DKDETODO_VERSION="${PROJECT_VERS
 add_subdirectory(src)
 
 install(FILES data/org.anjankow.kdetodo.desktop DESTINATION ${KDE_INSTALL_APPDIR})
-install(FILES data/org.anjankow.kdetodo.svg DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/scalable/apps)
+# The application icon in the sizes the desktop asks for.
+foreach(size 16 22 24 32 48 64 128 256 512)
+    install(FILES data/icons/${size}/org.anjankow.kdetodo.png DESTINATION ${KDE_INSTALL_ICONDIR}/hicolor/${size}x${size}/apps)
+endforeach()
 
 include(CTest)
 if(BUILD_TESTING)
@@ -66,7 +69,7 @@ set(CPACK_DEBIAN_PACKAGE_SECTION "utils")
 set(CPACK_DEBIAN_PACKAGE_PRIORITY "optional")
 set(CPACK_DEBIAN_PACKAGE_SHLIBDEPS ON)
 # Not found by shlibdeps: the QML modules the interface imports, and the
-# SVG support for the application icon.
+# SVG support for the icons of the buttons.
 set(CPACK_DEBIAN_PACKAGE_DEPENDS "libqt5svg5, qml-module-qtquick2, qml-module-qtquick-window2, qml-module-qtquick-controls2, qml-module-qtquick-templates2, qml-module-qtquick-layouts, qml-module-qt-labs-platform, qml-module-org-kde-kirigami2, qml-module-org-kde-qqc2desktopstyle")
 include(CPack)
 
