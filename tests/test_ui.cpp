@@ -538,6 +538,80 @@ private Q_SLOTS:
         QCOMPARE(ui.savedTitles(), QStringList({"C"}));
     }
 
+    // The dialog that asks before deleting several tasks works with the keyboard.
+    void deleteConfirmationHasCancelSelectedAndWorksWithTheKeyboard()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        const QString c = ui.add("C");
+        auto openDialog = [&ui] {
+            ui.key(Qt::Key_Delete, Qt::ShiftModifier);
+            QTRY_VERIFY(ui.isOpen("confirmDeleteDialog"));
+        };
+        ui.key(Qt::Key_Down); // highlight A, tick A and B
+        ui.key(Qt::Key_Down, Qt::ShiftModifier);
+        QCOMPARE(ui.list()->checkedIds(), QStringList({a, b}));
+
+        // Cancel has the focus when it opens (a visible focus), Delete does not.
+        openDialog();
+        QTRY_VERIFY(ui.item("rejectDeleteButton")->hasActiveFocus());
+        QVERIFY(ui.item("rejectDeleteButton")->property("visualFocus").toBool());
+        QVERIFY(!ui.item("confirmDeleteButton")->hasActiveFocus());
+
+        // Enter on the preselected Cancel keeps everything.
+        ui.key(Qt::Key_Return);
+        QTRY_VERIFY(ui.isClosed("confirmDeleteDialog"));
+        QCOMPARE(ui.shown(), QStringList({"A", "B", "C"}));
+        QTRY_VERIFY(ui.listHasFocus()); // the list gets the keys back
+
+        // Arrows move the selection, both ways and with every arrow key.
+        openDialog();
+        QTRY_VERIFY(ui.item("rejectDeleteButton")->hasActiveFocus());
+        ui.key(Qt::Key_Left);
+        QTRY_VERIFY(ui.item("confirmDeleteButton")->hasActiveFocus());
+        QVERIFY(ui.item("confirmDeleteButton")->property("visualFocus").toBool());
+        ui.key(Qt::Key_Right);
+        QTRY_VERIFY(ui.item("rejectDeleteButton")->hasActiveFocus());
+        ui.key(Qt::Key_Down);
+        QTRY_VERIFY(ui.item("confirmDeleteButton")->hasActiveFocus());
+        ui.key(Qt::Key_Up);
+        QTRY_VERIFY(ui.item("rejectDeleteButton")->hasActiveFocus());
+        ui.key(Qt::Key_Right); // Delete
+        QTRY_VERIFY(ui.item("confirmDeleteButton")->hasActiveFocus());
+        QCOMPARE(ui.shown().size(), 3); // moving the selection deletes nothing
+
+        // Enter presses the selected button, not only a click.
+        ui.key(Qt::Key_Enter); // the keypad Enter too
+        QTRY_VERIFY(ui.isClosed("confirmDeleteDialog"));
+        QCOMPARE(ui.shown(), QStringList({"C"}));
+        QCOMPARE(ui.savedTitles(), QStringList({"C"})); // gone for good
+        QVERIFY(!ui.store()->task(a));
+        QVERIFY(ui.store()->task(c));
+    }
+
+    void deleteConfirmationEscapeAndTabWork()
+    {
+        Ui ui;
+        ui.add("A");
+        ui.add("B");
+        ui.key(Qt::Key_A, Qt::ControlModifier);
+        ui.key(Qt::Key_Delete, Qt::ShiftModifier);
+        QTRY_VERIFY(ui.isOpen("confirmDeleteDialog"));
+        ui.key(Qt::Key_Escape); // closes without deleting
+        QTRY_VERIFY(ui.isClosed("confirmDeleteDialog"));
+        QCOMPARE(ui.shown().size(), 2);
+        QCOMPARE(ui.list()->checkedCount(), 2);
+
+        ui.key(Qt::Key_Delete, Qt::ShiftModifier);
+        QTRY_VERIFY(ui.item("rejectDeleteButton")->hasActiveFocus());
+        ui.key(Qt::Key_Tab); // Tab moves on as usual
+        QTRY_VERIFY(!ui.item("rejectDeleteButton")->hasActiveFocus());
+        ui.key(Qt::Key_Escape);
+        QTRY_VERIFY(ui.isClosed("confirmDeleteDialog"));
+        QCOMPARE(ui.shown().size(), 2);
+    }
+
     void singleDeleteDoesNotAsk()
     {
         Ui ui;
