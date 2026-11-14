@@ -417,6 +417,9 @@ private Q_SLOTS:
         };
         QCOMPARE(titles(), QStringList({"A", "C", "D", "E", "F"}));
         QCOMPARE(t.app->topTasks().at(0).toMap().value("id").toString(), ids.at(0));
+        QCOMPARE(t.app->topTasks().at(0).toMap().value("description").toString(), QString());
+        t.store()->updateTask(ids.at(2), "C", "Details of C"); // shown under the title
+        QCOMPARE(t.app->topTasks().at(1).toMap().value("description").toString(), QString("Details of C"));
 
         t.app->complete({ids.at(0)}); // completing one lets the next move up
         QVERIFY(spy.count() > 0);

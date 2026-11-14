@@ -11,7 +11,7 @@ Window {
 
     signal openRequested()
 
-    width: Kirigami.Units.gridUnit * 18
+    width: Kirigami.Units.gridUnit * 22
     height: content.implicitHeight + Kirigami.Units.largeSpacing * 2
     // Opening and closing the popup must leave the main window alone: only
     // "Open Todo" brings it to the front. Window managers raise and focus a
@@ -32,6 +32,9 @@ Window {
         }
     }
 
+    // How many tasks of the list are not in the popup.
+    readonly property int moreCount: Math.max(0, app.activeModel.totalCount - app.topTasks.length)
+
     Rectangle {
         anchors.fill: parent
         color: "transparent"
@@ -39,38 +42,90 @@ Window {
         border.color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.3)
     }
 
+    // Laid out like Plasma's notification popup: a large title with the
+    // application's icon, then one entry per task with a line on its left,
+    // its title in bold and its description below.
     ColumnLayout {
         id: content
         anchors.fill: parent
         anchors.margins: Kirigami.Units.largeSpacing
-        spacing: Kirigami.Units.smallSpacing
+        spacing: Kirigami.Units.largeSpacing
 
-        Kirigami.Heading {
-            level: 4
-            text: i18n("Next tasks")
+        RowLayout {
+            objectName: "trayHeader"
+            spacing: Kirigami.Units.smallSpacing
+
+            Kirigami.Icon {
+                objectName: "trayIcon"
+                source: "qrc:/qml/icons/app.png"
+                implicitWidth: Kirigami.Units.iconSizes.medium
+                implicitHeight: Kirigami.Units.iconSizes.medium
+            }
+            Kirigami.Heading {
+                objectName: "trayHeading"
+                level: 1
+                // As large as the title of Plasma's own popups.
+                font.pointSize: Kirigami.Theme.defaultFont.pointSize * 1.6
+                text: i18n("Todo")
+            }
         }
+
         Repeater {
             model: app.topTasks
 
-            RowLayout {
+            Item {
                 objectName: "trayTask-" + modelData.id
                 Layout.fillWidth: true
-                spacing: Kirigami.Units.smallSpacing
+                implicitHeight: Math.max(texts.implicitHeight, complete.implicitHeight)
 
-                Text {
-                    objectName: "trayTitle-" + modelData.id
-                    Layout.fillWidth: true
-                    text: modelData.title
-                    textFormat: Text.PlainText
-                    elide: Text.ElideRight
-                    color: Kirigami.Theme.textColor
-                    font: Kirigami.Theme.defaultFont
+                // The line on the left, as notifications have, along the text.
+                Rectangle {
+                    objectName: "trayLine-" + modelData.id
+                    width: 2
+                    y: texts.y
+                    height: texts.height
+                    color: Qt.rgba(Kirigami.Theme.textColor.r, Kirigami.Theme.textColor.g, Kirigami.Theme.textColor.b, 0.25)
+                }
+                Column {
+                    id: texts
+                    x: Kirigami.Units.largeSpacing
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: parent.width - x - complete.width - Kirigami.Units.smallSpacing
+                    spacing: 2
+
+                    Text {
+                        objectName: "trayTitle-" + modelData.id
+                        width: parent.width
+                        text: modelData.title
+                        textFormat: Text.PlainText
+                        elide: Text.ElideRight
+                        color: Kirigami.Theme.textColor
+                        font.family: Kirigami.Theme.defaultFont.family
+                        font.pointSize: Kirigami.Theme.defaultFont.pointSize + 1
+                        font.bold: true
+                    }
+                    Text {
+                        objectName: "trayDescription-" + modelData.id
+                        width: parent.width
+                        visible: modelData.description !== ""
+                        text: modelData.description
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                        color: Kirigami.Theme.textColor
+                        font: Kirigami.Theme.defaultFont
+                    }
                 }
                 QQC2.ToolButton {
+                    id: complete
                     objectName: "trayComplete-" + modelData.id
-                    icon.name: "checkmark"
-                    icon.color: Kirigami.Theme.positiveTextColor
-                    QQC2.ToolTip.text: i18n("Complete")
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    icon.source: "qrc:/qml/icons/complete.svg"
+                    display: QQC2.AbstractButton.IconOnly
+                    text: i18n("Complete")
+                    QQC2.ToolTip.text: text
                     QQC2.ToolTip.visible: hovered
                     QQC2.ToolTip.delay: Kirigami.Units.toolTipDelay
                     onClicked: app.complete([modelData.id])
@@ -82,6 +137,14 @@ Window {
             visible: app.topTasks.length === 0
             text: i18n("No tasks")
             opacity: 0.7
+        }
+        // Like the notifications' "Show 26 More": the rest is in the window.
+        QQC2.ToolButton {
+            objectName: "trayMore"
+            visible: popup.moreCount > 0
+            text: i18np("Show %1 more", "Show %1 more", popup.moreCount)
+            flat: true
+            onClicked: popup.openRequested()
         }
         Kirigami.Separator {
             Layout.fillWidth: true

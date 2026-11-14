@@ -1334,6 +1334,68 @@ private Q_SLOTS:
         QVERIFY(!findItem(popup->contentItem(), "trayTitle-" + ids.at(0)));
     }
 
+    void trayPopupLooksLikeNotifications()
+    {
+        Ui ui;
+        QStringList ids;
+        ids.append(ui.store()->addTask("A", "Details of A"));
+        for (const char *title : {"B", "C", "D", "E", "F", "G"}) {
+            ids.append(ui.add(title));
+        }
+        auto *popup = ui.window->findChild<QQuickWindow *>("trayPopup");
+        QVERIFY(popup);
+        ui.window->hide();
+        popup->show();
+        QVERIFY(QTest::qWaitForWindowExposed(popup));
+        QQuickItem *root = popup->contentItem();
+
+        // The title: the application icon and a large heading.
+        QQuickItem *icon = findItem(root, "trayIcon");
+        QQuickItem *heading = findItem(root, "trayHeading");
+        QVERIFY(icon && heading);
+        QCOMPARE(heading->property("text").toString(), QString("Todo"));
+        QVERIFY(heading->property("font").value<QFont>().pointSizeF() > QGuiApplication::font().pointSizeF() * 1.4);
+        QVERIFY(icon->x() < heading->x());
+
+        // Each task: a bold title, its description below and a line on the left.
+        QQuickItem *title = findItem(root, "trayTitle-" + ids.at(0));
+        QQuickItem *description = findItem(root, "trayDescription-" + ids.at(0));
+        QQuickItem *line = findItem(root, "trayLine-" + ids.at(0));
+        QVERIFY(title && description && line);
+        QVERIFY(title->property("font").value<QFont>().bold());
+        QVERIFY(description->isVisible());
+        QCOMPARE(description->property("text").toString(), QString("Details of A"));
+        QCOMPARE(description->property("maximumLineCount").toInt(), 2);
+        const QRectF titleRect = title->mapRectToItem(root, title->boundingRect());
+        const QRectF descriptionRect = description->mapRectToItem(root, description->boundingRect());
+        const QRectF lineRect = line->mapRectToItem(root, line->boundingRect());
+        QVERIFY(descriptionRect.top() >= titleRect.bottom());
+        QVERIFY(lineRect.right() < titleRect.left());
+        QVERIFY(lineRect.top() <= titleRect.top() && lineRect.bottom() >= descriptionRect.bottom());
+        QVERIFY(!findItem(root, "trayDescription-" + ids.at(1))->isVisible()); // B has none
+
+        // Below the tasks: how many more there are, then the button to open the app.
+        QQuickItem *more = findItem(root, "trayMore");
+        QQuickItem *open = findItem(root, "trayOpen");
+        QVERIFY(more && open);
+        QVERIFY(more->isVisible());
+        QCOMPARE(more->property("text").toString(), QString("Show 2 more"));
+        QVERIFY(more->mapToItem(root, QPointF()).y() > lineRect.bottom());
+        QVERIFY(open->mapToItem(root, QPointF()).y() > more->mapToItem(root, QPointF()).y());
+
+        // Completing one task leaves one more; a click on it opens the application.
+        ui.app->complete({ids.at(6)});
+        QTRY_COMPARE(more->property("text").toString(), QString("Show 1 more"));
+        QTest::qWait(30);
+        QTest::mouseClick(popup, Qt::LeftButton, Qt::NoModifier, Ui::center(more));
+        QTRY_VERIFY(ui.window->isVisible());
+        QTRY_VERIFY(!popup->isVisible());
+
+        // Without more tasks than shown, it is not there.
+        ui.app->complete({ids.at(5)});
+        QTRY_VERIFY(!more->isVisible());
+    }
+
     void trayPopupOpensTheApplicationWindow()
     {
         Ui ui;

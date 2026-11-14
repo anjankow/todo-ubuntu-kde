@@ -30,7 +30,7 @@ class AppController : public QObject
     Q_PROPERTY(TaskListModel *currentModel READ currentModel NOTIFY currentTabChanged)
     Q_PROPERTY(QVariantList labels READ labels NOTIFY labelsChanged)
     Q_PROPERTY(QStringList palette READ palette CONSTANT)
-    // The first tasks of the Tasks list (id, title), for the tray popup.
+    // The first tasks of the Tasks list (id, title, description), for the tray popup.
     Q_PROPERTY(QVariantList topTasks READ topTasks NOTIFY topTasksChanged)
     // With a tray icon, closing the window only hides it.
     Q_PROPERTY(bool keepRunningInTray READ keepRunningInTray WRITE setKeepRunningInTray NOTIFY keepRunningInTrayChanged)
