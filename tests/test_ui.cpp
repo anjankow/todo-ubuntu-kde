@@ -729,6 +729,34 @@ private Q_SLOTS:
         QCOMPARE(ui.store()->task(a)->state, TaskState::Completed);
     }
 
+    void shortcutsChosenInTheDialogAreSavedInTheTodoFile()
+    {
+        Ui ui;
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        ui.click("shortcutField-complete");
+        QTest::keyClick(ui.window, Qt::Key_J, Qt::ControlModifier);
+        QTRY_COMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("Ctrl+J"));
+        ui.click("shortcutClear-restore");
+        QTRY_COMPARE(ui.item("shortcutField-restore")->property("text").toString(), QString("None"));
+
+        TodoStore disk;
+        QVERIFY(Storage::load(disk, ui.app->storagePath()));
+        QCOMPARE(disk.shortcuts().value("complete"), QString("Ctrl+J"));
+        QCOMPARE(disk.shortcuts().value("restore"), QString());
+        QCOMPARE(disk.shortcuts().size(), 4);
+
+        // After a restart the dialog shows what the file says.
+        QMetaObject::invokeMethod(ui.object("shortcutsDialog"), "close");
+        QTRY_VERIFY(ui.isClosed("shortcutsDialog"));
+        ui.restart();
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        QTRY_COMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("Ctrl+J"));
+        QCOMPARE(ui.item("shortcutField-restore")->property("text").toString(), QString("None"));
+        QCOMPARE(ui.item("shortcutField-cancel")->property("text").toString(), QString("Del"));
+    }
+
     void shortcutsDialogRefusesKeysInUseAndSaysWhy()
     {
         Ui ui;

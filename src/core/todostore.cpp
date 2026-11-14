@@ -343,9 +343,18 @@ bool TodoStore::removeLabel(const QString &id)
     return true;
 }
 
-void TodoStore::setContent(const QVector<Task> &tasks, const QVector<Label> &labels)
+void TodoStore::setShortcuts(const QMap<QString, QString> &shortcuts)
+{
+    if (shortcuts != m_shortcuts) {
+        m_shortcuts = shortcuts;
+        Q_EMIT changed();
+    }
+}
+
+void TodoStore::setContent(const QVector<Task> &tasks, const QVector<Label> &labels, const QMap<QString, QString> &shortcuts)
 {
     m_tasks = tasks;
     m_labels = labels;
+    m_shortcuts = shortcuts;
     Q_EMIT changed();
 }

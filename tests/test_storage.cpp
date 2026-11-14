@@ -83,6 +83,49 @@ private Q_SLOTS:
         QVERIFY(!loaded.task(b)->returned);
     }
 
+    void shortcutsAreKept()
+    {
+        QTemporaryDir dir;
+        const QString path = Storage::filePath(dir.path());
+        TodoStore store;
+        store.addTask("A");
+        store.setShortcuts({{"complete", "K"}, {"cancel", ""}, {"postpone", "Ctrl+P"}, {"restore", "F5"}});
+        QVERIFY(Storage::save(store, path));
+
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::ReadOnly | QIODevice::Text));
+        const QJsonObject shortcuts = QJsonDocument::fromJson(file.readAll()).object().value("shortcuts").toObject();
+        QCOMPARE(shortcuts.value("postpone").toString(), QString("Ctrl+P"));
+        QVERIFY(shortcuts.contains("cancel")); // a removed shortcut is saved as empty text
+
+        TodoStore loaded;
+        QVERIFY(Storage::load(loaded, path));
+        QCOMPARE(loaded.shortcuts(), store.shortcuts());
+    }
+
+    void shortcutsOfOlderOrBrokenFilesAreIgnored()
+    {
+        QTemporaryDir dir;
+        const QString path = Storage::filePath(dir.path());
+        QFile file(path);
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(R"({"tasks":[],"shortcuts":{"complete":"K","cancel":5,"restore":null,"postpone":["P"]}})");
+        file.close();
+        TodoStore loaded;
+        QVERIFY(Storage::load(loaded, path));
+        QCOMPARE(loaded.shortcuts(), (QMap<QString, QString> {{"complete", "K"}})); // only text values
+
+        file.open(QIODevice::WriteOnly);
+        file.write(R"({"tasks":[],"shortcuts":"nonsense"})");
+        file.close();
+        QVERIFY(Storage::load(loaded, path));
+        QVERIFY(loaded.shortcuts().isEmpty());
+
+        // Without a file (or for a file without the entry) there are none.
+        QVERIFY(Storage::load(loaded, dir.filePath("missing.json")));
+        QVERIFY(loaded.shortcuts().isEmpty());
+    }
+
     void missingFileGivesEmptyList()
     {
         QTemporaryDir dir;

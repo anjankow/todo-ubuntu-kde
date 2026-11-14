@@ -77,7 +77,12 @@ bool Storage::save(const TodoStore &store, const QString &path, QString *error)
         }
         tasks.append(o);
     }
-    const QJsonObject root {{QStringLiteral("version"), 1}, {QStringLiteral("labels"), labels}, {QStringLiteral("tasks"), tasks}};
+    QJsonObject shortcuts;
+    for (auto it = store.shortcuts().cbegin(); it != store.shortcuts().cend(); ++it) {
+        shortcuts.insert(it.key(), it.value());
+    }
+    const QJsonObject root {
+        {QStringLiteral("version"), 1}, {QStringLiteral("shortcuts"), shortcuts}, {QStringLiteral("labels"), labels}, {QStringLiteral("tasks"), tasks}};
 
     QSaveFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Text)) {
@@ -158,6 +163,15 @@ bool Storage::load(TodoStore &store, const QString &path, QString *error)
         tasks.append(t);
     }
 
-    store.setContent(tasks, labels);
+    // Shortcuts: only text values count; what they mean is up to the application.
+    QMap<QString, QString> shortcuts;
+    const QJsonObject shortcutObject = root.value(QStringLiteral("shortcuts")).toObject();
+    for (auto it = shortcutObject.constBegin(); it != shortcutObject.constEnd(); ++it) {
+        if (it.value().isString()) {
+            shortcuts.insert(it.key(), it.value().toString());
+        }
+    }
+
+    store.setContent(tasks, labels, shortcuts);
     return true;
 }

@@ -2,6 +2,9 @@
 
 #include "app/trayicon.h"
 
+#include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTest>
@@ -561,8 +564,105 @@ private Q_SLOTS:
         QCOMPARE(t.app->shortcutKeys("postpone"), QString("Ctrl+P"));
         QCOMPARE(t.app->shortcutKeys("restore"), QString()); // removed stays removed
         QCOMPARE(t.app->shortcutKeys("cancel"), QString("Del"));
-        QCOMPARE(Settings(t.configFile).shortcut("complete", "?"), QString("X"));
-        QCOMPARE(Settings(t.configFile).shortcut("nothing", "fallback"), QString("fallback"));
+    }
+
+    // The shortcuts are kept in the todo file, all four of them, and nowhere else.
+    void shortcutsLiveInTheTodoFileOnly()
+    {
+        TestEnv t;
+        QVERIFY(t.app->setShortcut("complete", "X").isEmpty());
+        QVERIFY(t.app->setShortcut("restore", "").isEmpty());
+
+        QFile file(t.dir.filePath("todos.json"));
+        QVERIFY(file.open(QIODevice::ReadOnly));
+        const QJsonObject shortcuts = QJsonDocument::fromJson(file.readAll()).object().value("shortcuts").toObject();
+        QCOMPARE(shortcuts.size(), 4); // also the ones left as they were, and the removed one
+        QCOMPARE(shortcuts.value("complete").toString(), QString("X"));
+        QCOMPARE(shortcuts.value("cancel").toString(), QString("Del"));
+        QCOMPARE(shortcuts.value("postpone").toString(), QString("P"));
+        QVERIFY(shortcuts.contains("restore"));
+        QCOMPARE(shortcuts.value("restore").toString(), QString());
+
+        // The settings file only knows where the todo file is.
+        QFile config(t.configFile);
+        QVERIFY(config.open(QIODevice::ReadOnly));
+        const QString configText = QString::fromUtf8(config.readAll());
+        QVERIFY2(!configText.contains("Shortcuts") && !configText.contains("complete"), qPrintable(configText));
+        QVERIFY(configText.contains("Directory"));
+    }
+
+    void aTodoFileWithoutShortcutsGetsTheDefaults()
+    {
+        TestEnv t;
+        t.add("A");
+        QVERIFY(t.app->setShortcut("complete", "X").isEmpty());
+        t.app.reset();
+        // An older file, written before there were shortcuts.
+        QFile file(t.dir.filePath("todos.json"));
+        QVERIFY(file.open(QIODevice::WriteOnly));
+        file.write(R"({"version":1,"labels":[],"tasks":[{"id":"1","title":"Old task","state":"active"}]})");
+        file.close();
+        t.open();
+        QCOMPARE(t.shown(), QStringList({"Old task"}));
+        for (const QVariant &entry : t.app->configurableShortcuts()) {
+            QVERIFY(entry.toMap().value("isDefault").toBool());
+        }
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("K")); // not the X of the file before
+        // The first change writes all four.
+        QVERIFY(t.app->setShortcut("cancel", "X").isEmpty());
+        TodoStore disk;
+        QVERIFY(Storage::load(disk, t.app->storagePath()));
+        QCOMPARE(disk.shortcuts().size(), 4);
+        QCOMPARE(disk.shortcuts().value("complete"), QString("K"));
+        QCOMPARE(disk.shortcuts().value("cancel"), QString("X"));
+    }
+
+    void shortcutsFollowTheTodoFileToAnotherFolder()
+    {
+        TestEnv t;
+        QVERIFY(t.app->setShortcut("complete", "X").isEmpty());
+        t.add("Mine");
+
+        // Moving the file takes the shortcuts along.
+        QTemporaryDir moved;
+        QCOMPARE(t.app->changeStorageDir(moved.path()), AppController::FolderChanged);
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("X"));
+        t.open();
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("X"));
+
+        // Loading another folder's file brings that file's shortcuts.
+        QTemporaryDir other;
+        TodoStore theirs;
+        theirs.addTask("Theirs");
+        theirs.setShortcuts({{"complete", "Ctrl+J"}, {"cancel", "Ctrl+X"}, {"postpone", ""}, {"restore", "F5"}});
+        QVERIFY(Storage::save(theirs, other.filePath("todos.json")));
+        QSignalSpy spy(t.app.get(), &AppController::shortcutsChanged);
+        QCOMPARE(t.app->changeStorageDir(other.path(), AppController::LoadExisting), AppController::FolderChanged);
+        QVERIFY(spy.count() > 0);
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("Ctrl+J"));
+        QCOMPARE(t.app->shortcutKeys("cancel"), QString("Ctrl+X"));
+        QCOMPARE(t.app->shortcutKeys("postpone"), QString());
+        QCOMPARE(t.app->shortcutKeys("restore"), QString("F5"));
+        QCOMPARE(t.app->actionForKey(Qt::Key_J, Qt::ControlModifier), QString("complete"));
+
+        // A folder whose file has none: the defaults, not the previous file's.
+        QTemporaryDir plain;
+        QVERIFY(Storage::save(TodoStore(), plain.filePath("todos.json")));
+        QCOMPARE(t.app->changeStorageDir(plain.path(), AppController::LoadExisting), AppController::FolderChanged);
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("K"));
+        QCOMPARE(t.app->shortcutKeys("cancel"), QString("Del"));
+    }
+
+    void overwritingAFolderKeepsTheCurrentShortcuts()
+    {
+        TestEnv t;
+        QVERIFY(t.app->setShortcut("postpone", "Y").isEmpty());
+        QTemporaryDir other;
+        QVERIFY(Storage::save(TodoStore(), other.filePath("todos.json")));
+        QCOMPARE(t.app->changeStorageDir(other.path(), AppController::Overwrite), AppController::FolderChanged);
+        TodoStore disk;
+        QVERIFY(Storage::load(disk, other.filePath("todos.json")));
+        QCOMPARE(disk.shortcuts().value("postpone"), QString("Y"));
     }
 
     void shortcutsAreRefusedWhenUsedElsewhere()
@@ -620,10 +720,10 @@ private Q_SLOTS:
         QCOMPARE(t.app->shortcutKeys("restore"), QString("K"));
     }
 
-    void brokenSettingsEntryMeansNoShortcut()
+    void brokenShortcutEntryMeansNoShortcut()
     {
         TestEnv t;
-        Settings(t.configFile).setShortcut("complete", "not a key at all");
+        t.store()->setShortcuts({{"complete", "not a key at all"}});
         QCOMPARE(t.app->shortcutKeys("complete"), QString());
         QVERIFY(t.app->actionForKey(Qt::Key_K, Qt::NoModifier).isEmpty());
     }

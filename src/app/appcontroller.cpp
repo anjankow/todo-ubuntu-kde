@@ -238,7 +238,8 @@ QVariantList AppController::configurableShortcuts() const
 
 QString AppController::shortcutKeys(const QString &action) const
 {
-    const QString stored = m_settings.shortcut(action, defaultKeysOf(action));
+    const QMap<QString, QString> &saved = m_store->shortcuts(); // from the todo file
+    const QString stored = saved.contains(action) ? saved.value(action) : defaultKeysOf(action);
     // What is stored is normalised: a hand-edited or broken entry reads as no shortcut.
     const QKeySequence keys = parseKeys(stored);
     return isSingleKey(keys) ? keys.toString(QKeySequence::PortableText) : QString();
@@ -316,7 +317,13 @@ QString AppController::setShortcut(const QString &action, const QString &keys)
         }
         normalised = parsed.toString(QKeySequence::PortableText);
     }
-    m_settings.setShortcut(action, normalised);
+    // All four are written to the todo file, whichever one changed.
+    QMap<QString, QString> all;
+    for (const ConfigurableShortcut &entry : configurable) {
+        const QString name = QString::fromLatin1(entry.action);
+        all.insert(name, name == action ? normalised : shortcutKeys(name));
+    }
+    m_store->setShortcuts(all); // saves the todo file
     Q_EMIT shortcutsChanged();
     return {};
 }
@@ -341,11 +348,13 @@ void AppController::loadFromDisk()
         // Keep the unreadable file aside so that saving does not destroy it.
         const QString backup = storagePath() + QStringLiteral(".unreadable-") + m_clock().toString(QStringLiteral("yyyyMMdd-HHmmss"));
         QFile::rename(storagePath(), backup);
-        m_store->setContent({}, {});
+        m_store->setContent({}, {}, {});
         setError(i18n("Could not read %1: %2\nThe file was kept as %3.", storagePath(), error, backup));
     }
     // Postponed tasks whose time has come return to the list on startup.
     m_store->releaseDuePostponed(m_clock());
+    // The shortcuts come with the file: another folder's file has its own.
+    Q_EMIT shortcutsChanged();
 }
 
 void AppController::save()

@@ -79,7 +79,9 @@ The last four rows (complete, cancel, postpone, restore) can be changed: open *S
 click the shortcut of an action and press the key or combination you want (`Esc` gives up). A key that is
 already used is refused and the message says what uses it: the keys of the other shortcuts, and the fixed ones
 in the table above, cannot be taken. The cross next to a shortcut removes it, the arrow puts back its default
-without touching the others. The choice is saved with the other settings. Like the other task keys, these work
+without touching the others. The shortcuts are saved in the todo file, `todos.json`, together with your tasks and labels: copy or move that
+file and they come along, and a todo file without shortcuts uses the defaults. The only thing the app keeps
+outside it is the folder where the todo file is (in `~/.config/kdetodorc`). Like the other task keys, these work
 while the task list has the keyboard focus, not while you type in the new-task input.
 
 At start nothing is highlighted and the input does not have the focus: the keys go to the task list.
