@@ -13,6 +13,12 @@ public:
     QString storageDir() const;
     void setStorageDir(const QString &dir);
 
+    // The shortcut chosen for an action, in portable text ("K", "Del",
+    // "Ctrl+K"). An empty text means the user removed the shortcut; without
+    // an entry the fallback is returned.
+    QString shortcut(const QString &action, const QString &fallback) const;
+    void setShortcut(const QString &action, const QString &keys);
+
 private:
     QString m_configFile;
 };

@@ -13,6 +13,94 @@
 
 namespace
 {
+struct ConfigurableShortcut {
+    const char *action;
+    const char *defaultKeys;
+};
+// In the order shown in the Keyboard shortcuts dialog.
+const ConfigurableShortcut configurable[] = {
+    {"complete", "K"},
+    {"cancel", "Del"},
+    {"postpone", "P"},
+    {"restore", "R"},
+};
+
+QString shortcutName(const QString &action)
+{
+    if (action == QLatin1String("complete")) {
+        return i18nc("@action", "Complete");
+    }
+    if (action == QLatin1String("cancel")) {
+        return i18nc("@action", "Cancel task");
+    }
+    if (action == QLatin1String("postpone")) {
+        return i18nc("@action", "Postpone");
+    }
+    return i18nc("@action", "Restore");
+}
+
+QString defaultKeysOf(const QString &action)
+{
+    for (const ConfigurableShortcut &c : configurable) {
+        if (action == QLatin1String(c.action)) {
+            return QString::fromLatin1(c.defaultKeys);
+        }
+    }
+    return {};
+}
+
+bool isConfigurable(const QString &action)
+{
+    for (const ConfigurableShortcut &c : configurable) {
+        if (action == QLatin1String(c.action)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Keys with a fixed meaning: they cannot be given to an action.
+struct FixedShortcut {
+    QKeySequence keys;
+    QString meaning;
+};
+const QVector<FixedShortcut> &fixedShortcuts()
+{
+    static const QVector<FixedShortcut> list = {
+        {QKeySequence(Qt::Key_Up), i18n("move the highlight")},
+        {QKeySequence(Qt::Key_Down), i18n("move the highlight")},
+        {QKeySequence(Qt::SHIFT | Qt::Key_Up), i18n("tick the tasks the highlight passes")},
+        {QKeySequence(Qt::SHIFT | Qt::Key_Down), i18n("tick the tasks the highlight passes")},
+        {QKeySequence(Qt::CTRL | Qt::Key_Up), i18n("move the highlighted task")},
+        {QKeySequence(Qt::CTRL | Qt::Key_Down), i18n("move the highlighted task")},
+        {QKeySequence(Qt::Key_Return), i18n("open the task card")},
+        {QKeySequence(Qt::Key_Enter), i18n("open the task card")},
+        {QKeySequence(Qt::SHIFT | Qt::Key_Return), i18n("focus the new-task input")},
+        {QKeySequence(Qt::SHIFT | Qt::Key_Enter), i18n("focus the new-task input")},
+        {QKeySequence(Qt::Key_Escape), i18n("leave the input and remove the highlight")},
+        {QKeySequence(Qt::Key_Space), i18n("tick the highlighted task")},
+        {QKeySequence(Qt::CTRL | Qt::Key_A), i18n("tick all tasks")},
+        {QKeySequence(Qt::CTRL | Qt::Key_D), i18n("duplicate the selected tasks")},
+        {QKeySequence(Qt::SHIFT | Qt::Key_Delete), i18n("delete the selected tasks")},
+        {QKeySequence(Qt::CTRL | Qt::Key_PageUp), i18n("previous tab")},
+        {QKeySequence(Qt::CTRL | Qt::Key_PageDown), i18n("next tab")},
+        {QKeySequence(Qt::CTRL | Qt::Key_Q), i18n("quit")},
+    };
+    return list;
+}
+
+QKeySequence parseKeys(const QString &text)
+{
+    return QKeySequence(text, QKeySequence::PortableText);
+}
+
+// One real key or combination. (Text Qt cannot read parses as one "unknown"
+// key whose text is empty.)
+bool isSingleKey(const QKeySequence &keys)
+{
+    return keys.count() == 1 && !keys.toString(QKeySequence::PortableText).isEmpty();
+}
+
 QString stateName(TaskState state)
 {
     switch (state) {
@@ -127,6 +215,107 @@ QStringList AppController::palette() const
         colors.append(color.name());
     }
     return colors;
+}
+
+QVariantList AppController::configurableShortcuts() const
+{
+    QVariantList result;
+    for (const ConfigurableShortcut &c : configurable) {
+        const QString action = QString::fromLatin1(c.action);
+        const QString keys = shortcutKeys(action);
+        result.append(QVariantMap {{QStringLiteral("action"), action}, {QStringLiteral("name"), shortcutName(action)}, {QStringLiteral("keys"), keys},
+            {QStringLiteral("defaultKeys"), defaultKeysOf(action)}, {QStringLiteral("isDefault"), keys == defaultKeysOf(action)}});
+    }
+    return result;
+}
+
+QString AppController::shortcutKeys(const QString &action) const
+{
+    const QString stored = m_settings.shortcut(action, defaultKeysOf(action));
+    // What is stored is normalised: a hand-edited or broken entry reads as no shortcut.
+    const QKeySequence keys = parseKeys(stored);
+    return isSingleKey(keys) ? keys.toString(QKeySequence::PortableText) : QString();
+}
+
+QString AppController::keyText(int key, int modifiers) const
+{
+    switch (key) {
+    case Qt::Key_Shift:
+    case Qt::Key_Control:
+    case Qt::Key_Alt:
+    case Qt::Key_AltGr:
+    case Qt::Key_Meta:
+    case Qt::Key_Super_L:
+    case Qt::Key_Super_R:
+    case Qt::Key_CapsLock:
+    case Qt::Key_NumLock:
+    case Qt::Key_ScrollLock:
+    case Qt::Key_unknown:
+    case 0:
+        return {};
+    default:
+        break;
+    }
+    const int mods = modifiers & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+    return QKeySequence(key | mods).toString(QKeySequence::PortableText);
+}
+
+QString AppController::actionForKey(int key, int modifiers) const
+{
+    const QString text = keyText(key, modifiers);
+    if (text.isEmpty()) {
+        return {};
+    }
+    for (const ConfigurableShortcut &c : configurable) {
+        const QString action = QString::fromLatin1(c.action);
+        if (shortcutKeys(action) == text) {
+            return action;
+        }
+    }
+    return {};
+}
+
+QString AppController::conflictOf(const QString &action, const QKeySequence &keys) const
+{
+    for (const FixedShortcut &fixed : fixedShortcuts()) {
+        if (fixed.keys == keys) {
+            return i18n("%1 is already used to %2.", keys.toString(QKeySequence::NativeText), fixed.meaning);
+        }
+    }
+    for (const ConfigurableShortcut &c : configurable) {
+        const QString other = QString::fromLatin1(c.action);
+        if (other != action && parseKeys(shortcutKeys(other)) == keys) {
+            return i18n("%1 is already the shortcut of \"%2\".", keys.toString(QKeySequence::NativeText), shortcutName(other));
+        }
+    }
+    return {};
+}
+
+QString AppController::setShortcut(const QString &action, const QString &keys)
+{
+    if (!isConfigurable(action)) {
+        return i18n("Unknown action.");
+    }
+    QString normalised;
+    if (!keys.isEmpty()) {
+        const QKeySequence parsed = parseKeys(keys);
+        if (!isSingleKey(parsed)) {
+            return i18n("%1 is not a single key or key combination.", keys);
+        }
+        const QString conflict = conflictOf(action, parsed);
+        if (!conflict.isEmpty()) {
+            return conflict;
+        }
+        normalised = parsed.toString(QKeySequence::PortableText);
+    }
+    m_settings.setShortcut(action, normalised);
+    Q_EMIT shortcutsChanged();
+    return {};
+}
+
+QString AppController::resetShortcut(const QString &action)
+{
+    return setShortcut(action, defaultKeysOf(action));
 }
 
 QString AppController::storagePath() const

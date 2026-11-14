@@ -6,6 +6,7 @@
         <file>LabelsDialog.qml</file>
         <file>PostponeDialog.qml</file>
         <file>PostponeMenu.qml</file>
+        <file>ShortcutField.qml</file>
         <file>ShortcutsDialog.qml</file>
         <file>TaskCard.qml</file>
         <file>TaskList.qml</file>

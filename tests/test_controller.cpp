@@ -493,6 +493,141 @@ private Q_SLOTS:
         QVERIFY(app.store()->task(a)->returned);
     }
 
+    // --- shortcuts the user can change ---
+
+    void shortcutsHaveTheirDefaults()
+    {
+        TestEnv t;
+        const QVariantList list = t.app->configurableShortcuts();
+        QCOMPARE(list.size(), 4);
+        const QList<QPair<QString, QString>> expected = {{"complete", "K"}, {"cancel", "Del"}, {"postpone", "P"}, {"restore", "R"}};
+        for (int i = 0; i < expected.size(); ++i) {
+            const QVariantMap entry = list.at(i).toMap();
+            QCOMPARE(entry.value("action").toString(), expected.at(i).first);
+            QCOMPARE(entry.value("keys").toString(), expected.at(i).second);
+            QCOMPARE(entry.value("defaultKeys").toString(), expected.at(i).second);
+            QVERIFY(entry.value("isDefault").toBool());
+            QVERIFY(!entry.value("name").toString().isEmpty());
+            QVERIFY(!entry.value("name").toString().contains("…"));
+        }
+    }
+
+    void keyTextIsPortableAndIgnoresBareModifiers()
+    {
+        TestEnv t;
+        QCOMPARE(t.app->keyText(Qt::Key_K, Qt::NoModifier), QString("K"));
+        QCOMPARE(t.app->keyText(Qt::Key_Delete, Qt::NoModifier), QString("Del"));
+        QCOMPARE(t.app->keyText(Qt::Key_K, Qt::ControlModifier), QString("Ctrl+K"));
+        QCOMPARE(t.app->keyText(Qt::Key_K, Qt::ControlModifier | Qt::ShiftModifier), QString("Ctrl+Shift+K"));
+        QCOMPARE(t.app->keyText(Qt::Key_K, Qt::KeypadModifier), QString("K")); // keypad flag is not part of it
+        QCOMPARE(t.app->keyText(Qt::Key_F5, Qt::NoModifier), QString("F5"));
+        for (int key : {Qt::Key_Shift, Qt::Key_Control, Qt::Key_Alt, Qt::Key_Meta, Qt::Key_CapsLock, Qt::Key_unknown}) {
+            QVERIFY(t.app->keyText(key, Qt::NoModifier).isEmpty());
+        }
+    }
+
+    void actionForKeyFollowsTheShortcuts()
+    {
+        TestEnv t;
+        QCOMPARE(t.app->actionForKey(Qt::Key_K, Qt::NoModifier), QString("complete"));
+        QCOMPARE(t.app->actionForKey(Qt::Key_Delete, Qt::NoModifier), QString("cancel"));
+        QCOMPARE(t.app->actionForKey(Qt::Key_P, Qt::NoModifier), QString("postpone"));
+        QCOMPARE(t.app->actionForKey(Qt::Key_R, Qt::NoModifier), QString("restore"));
+        QVERIFY(t.app->actionForKey(Qt::Key_K, Qt::ControlModifier).isEmpty()); // a different combination
+        QVERIFY(t.app->actionForKey(Qt::Key_Delete, Qt::ShiftModifier).isEmpty()); // Shift+Delete deletes
+        QVERIFY(t.app->actionForKey(Qt::Key_X, Qt::NoModifier).isEmpty());
+        QVERIFY(t.app->actionForKey(Qt::Key_Shift, Qt::NoModifier).isEmpty());
+
+        QVERIFY(t.app->setShortcut("complete", "Ctrl+K").isEmpty());
+        QCOMPARE(t.app->actionForKey(Qt::Key_K, Qt::ControlModifier), QString("complete"));
+        QVERIFY(t.app->actionForKey(Qt::Key_K, Qt::NoModifier).isEmpty()); // the old key is free
+    }
+
+    void shortcutsCanBeChangedAndAreKept()
+    {
+        TestEnv t;
+        QSignalSpy spy(t.app.get(), &AppController::shortcutsChanged);
+        QVERIFY(t.app->setShortcut("complete", "X").isEmpty());
+        QVERIFY(t.app->setShortcut("postpone", "Ctrl+P").isEmpty());
+        QVERIFY(t.app->setShortcut("restore", "").isEmpty()); // removed
+        QCOMPARE(spy.count(), 3);
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("X"));
+        QCOMPARE(t.app->shortcutKeys("cancel"), QString("Del")); // untouched
+        QCOMPARE(t.app->shortcutKeys("restore"), QString());
+        QVERIFY(!t.app->configurableShortcuts().at(0).toMap().value("isDefault").toBool());
+
+        t.open(); // the choice lives in the settings file
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("X"));
+        QCOMPARE(t.app->shortcutKeys("postpone"), QString("Ctrl+P"));
+        QCOMPARE(t.app->shortcutKeys("restore"), QString()); // removed stays removed
+        QCOMPARE(t.app->shortcutKeys("cancel"), QString("Del"));
+        QCOMPARE(Settings(t.configFile).shortcut("complete", "?"), QString("X"));
+        QCOMPARE(Settings(t.configFile).shortcut("nothing", "fallback"), QString("fallback"));
+    }
+
+    void shortcutsAreRefusedWhenUsedElsewhere()
+    {
+        TestEnv t;
+        // another action
+        QString why = t.app->setShortcut("complete", "Del");
+        QVERIFY2(why.contains("Cancel task"), qPrintable(why));
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("K")); // nothing changed
+        QCOMPARE(t.app->shortcutKeys("cancel"), QString("Del"));
+        // keys with a fixed meaning
+        for (const char *fixed : {"Space", "Up", "Down", "Shift+Up", "Ctrl+Up", "Return", "Enter", "Shift+Return", "Esc", "Ctrl+A", "Ctrl+D", "Shift+Del",
+                 "Ctrl+PgUp", "Ctrl+PgDown", "Ctrl+Q"}) {
+            why = t.app->setShortcut("restore", fixed);
+            QVERIFY2(!why.isEmpty(), fixed);
+            QCOMPARE(t.app->shortcutKeys("restore"), QString("R"));
+        }
+        QVERIFY(t.app->setShortcut("restore", "Space").contains("tick"));
+        // not a single key
+        QVERIFY(!t.app->setShortcut("restore", "Ctrl+K, Ctrl+L").isEmpty());
+        QVERIFY(!t.app->setShortcut("restore", "no such key").isEmpty());
+        QVERIFY(!t.app->setShortcut("unknown", "Z").isEmpty());
+        // the same keys as it already has are fine
+        QVERIFY(t.app->setShortcut("complete", "K").isEmpty());
+        // a key freed by one action can go to another
+        QVERIFY(t.app->setShortcut("cancel", "").isEmpty());
+        QVERIFY(t.app->setShortcut("complete", "Del").isEmpty());
+        QCOMPARE(t.app->actionForKey(Qt::Key_Delete, Qt::NoModifier), QString("complete"));
+    }
+
+    void eachShortcutResetsOnItsOwn()
+    {
+        TestEnv t;
+        QVERIFY(t.app->setShortcut("complete", "X").isEmpty());
+        QVERIFY(t.app->setShortcut("postpone", "Y").isEmpty());
+        QVERIFY(t.app->setShortcut("restore", "").isEmpty());
+
+        QVERIFY(t.app->resetShortcut("complete").isEmpty());
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("K"));
+        QCOMPARE(t.app->shortcutKeys("postpone"), QString("Y")); // the others keep theirs
+        QCOMPARE(t.app->shortcutKeys("restore"), QString());
+        QVERIFY(t.app->configurableShortcuts().at(0).toMap().value("isDefault").toBool());
+        QVERIFY(!t.app->configurableShortcuts().at(2).toMap().value("isDefault").toBool());
+
+        QVERIFY(t.app->resetShortcut("restore").isEmpty()); // a removed one comes back too
+        QCOMPARE(t.app->shortcutKeys("restore"), QString("R"));
+        QCOMPARE(t.app->shortcutKeys("postpone"), QString("Y"));
+
+        // The default keys were taken meanwhile: refused, nothing else changes.
+        QVERIFY(t.app->setShortcut("complete", "X").isEmpty());
+        QVERIFY(t.app->setShortcut("restore", "K").isEmpty());
+        const QString why = t.app->resetShortcut("complete");
+        QVERIFY2(why.contains("Restore"), qPrintable(why));
+        QCOMPARE(t.app->shortcutKeys("complete"), QString("X"));
+        QCOMPARE(t.app->shortcutKeys("restore"), QString("K"));
+    }
+
+    void brokenSettingsEntryMeansNoShortcut()
+    {
+        TestEnv t;
+        Settings(t.configFile).setShortcut("complete", "not a key at all");
+        QCOMPARE(t.app->shortcutKeys("complete"), QString());
+        QVERIFY(t.app->actionForKey(Qt::Key_K, Qt::NoModifier).isEmpty());
+    }
+
     // --- highlight ---
 
     void highlightMovesWithArrowsAndCanBeCleared()

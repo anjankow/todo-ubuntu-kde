@@ -4,7 +4,7 @@
 
 A simple todo list for KDE Plasma 5 (Qt Quick + Kirigami, KDE Frameworks 5).
 Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
-(your home directory by default; change it with *Settings* → *Storage folder…*).
+(your home directory by default; change it with *Settings* → *Storage folder*).
 
 ## Using it
 
@@ -28,7 +28,7 @@ Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
   or the task changes its state; the icon is kept when the app is closed and reopened.
 - **Tabs** – *Tasks*, *Postponed*, *Completed*, *Cancelled*.
 - **Reorder** – drag a task by its handle, or `Ctrl+Up` / `Ctrl+Down` on the highlighted task.
-- **Labels** – *Settings* → *Labels…* defines labels (name + one of 12 colors).
+- **Labels** – *Settings* → *Labels* defines labels (name + one of 12 colors).
   Assign them in the task card, or tick tasks and click a label above the list.
   With nothing ticked, clicking a label filters the lists
   (a task is shown if it has any of the selected labels).
@@ -48,7 +48,7 @@ to see all of them again.
 
 ## Keyboard shortcuts
 
-The list is also in the app: *Settings* (the button at the right end of the toolbar) → *Keyboard shortcuts…*.
+The list is also in the app: *Settings* (the button at the right end of the toolbar) → *Keyboard shortcuts*.
 "Selected" means the ticked tasks or, when none is ticked, the highlighted task.
 
 | Key | Action |
@@ -65,10 +65,22 @@ The list is also in the app: *Settings* (the button at the right end of the tool
 | `Ctrl+PgDown` / `Ctrl+PgUp` | Next / previous tab (wraps around) |
 | `Ctrl+A` | Tick all tasks of the current tab |
 | `Ctrl+D` | Duplicate the selected tasks (copies go to the bottom of the Tasks list) |
-| `Delete` | Cancel the selected tasks |
 | `Shift+Delete` | Delete the selected tasks for good (several at once ask first) |
+| `K` | Complete the selected tasks (can be changed) |
+| `Del` | Cancel the selected tasks (can be changed) |
+| `P` | Postpone the selected tasks: opens the menu asking for how long (can be changed) |
+| `R` | Restore the selected tasks (can be changed) |
 | `Enter` in the task card title | Save and close the card |
 | `Ctrl+Q` | Quit |
+
+### Your own shortcuts
+
+The last four rows (complete, cancel, postpone, restore) can be changed: open *Settings* → *Keyboard shortcuts*,
+click the shortcut of an action and press the key or combination you want (`Esc` gives up). A key that is
+already used is refused and the message says what uses it: the keys of the other shortcuts, and the fixed ones
+in the table above, cannot be taken. The cross next to a shortcut removes it, the arrow puts back its default
+without touching the others. The choice is saved with the other settings. Like the other task keys, these work
+while the task list has the keyboard focus, not while you type in the new-task input.
 
 At start nothing is highlighted and the input does not have the focus: the keys go to the task list.
 Clicking a task also gives the keys to the list. In the empty input, `Up` / `Down` go back to the list.
