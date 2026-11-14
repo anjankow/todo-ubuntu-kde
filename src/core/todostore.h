@@ -2,6 +2,7 @@
 
 #include "task.h"
 
+#include <QMap>
 #include <QObject>
 #include <QSet>
 #include <QVector>
@@ -60,8 +61,13 @@ public:
     bool updateLabel(const QString &id, const QString &name, int color);
     bool removeLabel(const QString &id); // also unassigns it from all tasks
 
+    // The user's keyboard shortcuts (action -> keys in portable text; empty
+    // keys mean no shortcut). They are kept with the tasks, in the todo file.
+    const QMap<QString, QString> &shortcuts() const { return m_shortcuts; }
+    void setShortcuts(const QMap<QString, QString> &shortcuts);
+
     // Replaces all content (used when loading a file).
-    void setContent(const QVector<Task> &tasks, const QVector<Label> &labels);
+    void setContent(const QVector<Task> &tasks, const QVector<Label> &labels, const QMap<QString, QString> &shortcuts = {});
 
 Q_SIGNALS:
     void changed();
@@ -73,4 +79,5 @@ private:
 
     QVector<Task> m_tasks;
     QVector<Label> m_labels;
+    QMap<QString, QString> m_shortcuts;
 };

@@ -607,6 +607,237 @@ private Q_SLOTS:
         QCOMPARE(ui.savedTitles().size(), 3); // cancelled, not deleted
     }
 
+    // --- shortcuts the user can change ---
+
+    void defaultShortcutsCompleteRestoreAndPostpone()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        const QString c = ui.add("C");
+        ui.clickTask(a);
+        ui.key(Qt::Key_K); // complete
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Completed);
+
+        ui.clickTask(b);
+        ui.key(Qt::Key_P); // postpone: the menu asks for how long
+        QTRY_VERIFY(ui.object("postponeMenu")->property("opened").toBool());
+        ui.click("postponeOneWeek");
+        QTRY_COMPARE(ui.store()->task(b)->state, TaskState::Postponed);
+        QTRY_VERIFY(ui.listHasFocus()); // the keys work again after the menu
+
+        ui.showTab(AppController::CompletedTab);
+        QTRY_VERIFY(ui.row(a));
+        ui.clickTask(a);
+        ui.key(Qt::Key_R); // restore
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Active);
+        QVERIFY(ui.store()->task(c)->state == TaskState::Active);
+    }
+
+    void shortcutsActOnTickedTasksAndNeverInTheInput()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        ui.tick(a);
+        ui.tick(b);
+        ui.key(Qt::Key_K);
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Completed);
+        QCOMPARE(ui.store()->task(b)->state, TaskState::Completed);
+
+        ui.add("C");
+        ui.focusInput();
+        ui.type("kpr"); // typed text, not shortcuts
+        QCOMPARE(ui.inputText(), QString("kpr"));
+        QCOMPARE(ui.shown(), QStringList({"C"}));
+    }
+
+    void shortcutKeysThatDoNotApplyDoNothing()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        ui.clickTask(a);
+        ui.key(Qt::Key_R); // nothing to restore on the Tasks tab
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Active);
+        ui.showTab(AppController::CancelledTab);
+        ui.key(Qt::Key_P); // nothing to postpone there
+        QTest::qWait(50);
+        QVERIFY(!ui.object("postponeMenu")->property("opened").toBool());
+    }
+
+    void changedShortcutsWorkAndTheOldKeysDoNot()
+    {
+        Ui ui;
+        QVERIFY(ui.app->setShortcut("complete", "Ctrl+K").isEmpty());
+        QVERIFY(ui.app->setShortcut("cancel", "X").isEmpty());
+        const QString a = ui.add("A");
+        const QString b = ui.add("B");
+        ui.clickTask(a);
+        ui.key(Qt::Key_K); // the old key
+        ui.key(Qt::Key_Delete);
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Active);
+        ui.key(Qt::Key_K, Qt::ControlModifier);
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Completed);
+        ui.clickTask(b);
+        ui.key(Qt::Key_X);
+        QCOMPARE(ui.store()->task(b)->state, TaskState::Cancelled);
+    }
+
+    void shortcutsDialogChangesShortcutsByPressingKeys()
+    {
+        Ui ui;
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        for (const char *action : {"complete", "cancel", "postpone", "restore"}) {
+            QVERIFY2(ui.item(QString("shortcutField-") + action), action);
+        }
+        QCOMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("K"));
+        QCOMPARE(ui.item("shortcutField-cancel")->property("text").toString(), QString("Del"));
+        QCOMPARE(ui.item("shortcutName-complete")->property("text").toString(), QString("Complete"));
+        QVERIFY(!ui.item("shortcutReset-complete")->isEnabled()); // already the default
+
+        ui.click("shortcutField-complete"); // listens for the next key
+        QCOMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("Press a key"));
+        QTest::keyClick(ui.window, Qt::Key_Shift, Qt::NoModifier); // a bare modifier is not a shortcut
+        QCOMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("Press a key"));
+        QTest::keyClick(ui.window, Qt::Key_J, Qt::ControlModifier);
+        QTRY_COMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("Ctrl+J"));
+        QCOMPARE(ui.app->shortcutKeys("complete"), QString("Ctrl+J"));
+        QVERIFY(ui.item("shortcutReset-complete")->isEnabled());
+
+        // Esc gives up and keeps the shortcut.
+        ui.click("shortcutField-postpone");
+        QTest::keyClick(ui.window, Qt::Key_Escape);
+        QCOMPARE(ui.item("shortcutField-postpone")->property("text").toString(), QString("P"));
+        QVERIFY(ui.isOpen("shortcutsDialog")); // and does not close the dialog first
+
+        // Ctrl+Q while listening is a key to try, not a quit; it is refused.
+        ui.click("shortcutField-restore");
+        QTest::keyClick(ui.window, Qt::Key_Q, Qt::ControlModifier);
+        QTRY_VERIFY(ui.item("shortcutError-restore")->isVisible());
+        QVERIFY(ui.item("shortcutError-restore")->property("text").toString().contains("quit"));
+        QCOMPARE(ui.app->shortcutKeys("restore"), QString("R"));
+
+        // The shortcut goes on the keyboard right away.
+        QMetaObject::invokeMethod(ui.object("shortcutsDialog"), "close");
+        QTRY_VERIFY(ui.isClosed("shortcutsDialog"));
+        const QString a = ui.add("A");
+        ui.clickTask(a);
+        ui.key(Qt::Key_K);
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Active);
+        ui.key(Qt::Key_J, Qt::ControlModifier);
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Completed);
+    }
+
+    void shortcutsChosenInTheDialogAreSavedInTheTodoFile()
+    {
+        Ui ui;
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        ui.click("shortcutField-complete");
+        QTest::keyClick(ui.window, Qt::Key_J, Qt::ControlModifier);
+        QTRY_COMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("Ctrl+J"));
+        ui.click("shortcutClear-restore");
+        QTRY_COMPARE(ui.item("shortcutField-restore")->property("text").toString(), QString("None"));
+
+        TodoStore disk;
+        QVERIFY(Storage::load(disk, ui.app->storagePath()));
+        QCOMPARE(disk.shortcuts().value("complete"), QString("Ctrl+J"));
+        QCOMPARE(disk.shortcuts().value("restore"), QString());
+        QCOMPARE(disk.shortcuts().size(), 4);
+
+        // After a restart the dialog shows what the file says.
+        QMetaObject::invokeMethod(ui.object("shortcutsDialog"), "close");
+        QTRY_VERIFY(ui.isClosed("shortcutsDialog"));
+        ui.restart();
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        QTRY_COMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("Ctrl+J"));
+        QCOMPARE(ui.item("shortcutField-restore")->property("text").toString(), QString("None"));
+        QCOMPARE(ui.item("shortcutField-cancel")->property("text").toString(), QString("Del"));
+    }
+
+    void shortcutsDialogRefusesKeysInUseAndSaysWhy()
+    {
+        Ui ui;
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        // The rows are rebuilt after every change: always look the item up again.
+        auto error = [&ui](const char *action) {
+            return ui.item(QString("shortcutError-") + action);
+        };
+        auto errorShown = [&](const char *action) {
+            return error(action) && error(action)->isVisible();
+        };
+        QVERIFY(!errorShown("complete"));
+
+        ui.click("shortcutField-complete");
+        QTest::keyClick(ui.window, Qt::Key_Delete); // used by Cancel task
+        QTRY_VERIFY(errorShown("complete"));
+        QVERIFY(error("complete")->property("text").toString().contains("Cancel task"));
+        QCOMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("K"));
+
+        ui.click("shortcutField-complete");
+        QTest::keyClick(ui.window, Qt::Key_Space); // fixed
+        QTRY_VERIFY(error("complete")->property("text").toString().contains("tick"));
+
+        // The message goes away with a change that works, and only on its own row.
+        ui.click("shortcutField-complete");
+        QTest::keyClick(ui.window, Qt::Key_L);
+        QTRY_VERIFY(!errorShown("complete"));
+        QCOMPARE(ui.app->shortcutKeys("complete"), QString("L"));
+        QVERIFY(!errorShown("cancel"));
+    }
+
+    void shortcutsDialogRemovesAndResetsEachShortcutOnItsOwn()
+    {
+        Ui ui;
+        QVERIFY(ui.app->setShortcut("complete", "X").isEmpty());
+        QVERIFY(ui.app->setShortcut("postpone", "Y").isEmpty());
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        QVERIFY(ui.item("shortcutReset-complete")->isEnabled());
+        QVERIFY(!ui.item("shortcutReset-cancel")->isEnabled());
+
+        ui.click("shortcutClear-cancel");
+        QCOMPARE(ui.app->shortcutKeys("cancel"), QString());
+        QTRY_COMPARE(ui.item("shortcutField-cancel")->property("text").toString(), QString("None"));
+        QVERIFY(!ui.item("shortcutClear-cancel")->isEnabled());
+
+        ui.click("shortcutReset-complete");
+        QTRY_COMPARE(ui.item("shortcutField-complete")->property("text").toString(), QString("K"));
+        QCOMPARE(ui.app->shortcutKeys("postpone"), QString("Y")); // the others are untouched
+        QCOMPARE(ui.app->shortcutKeys("cancel"), QString());
+
+        ui.click("shortcutReset-cancel"); // back to Del
+        QTRY_COMPARE(ui.item("shortcutField-cancel")->property("text").toString(), QString("Del"));
+        QCOMPARE(ui.app->shortcutKeys("postpone"), QString("Y"));
+    }
+
+    void menuEntriesHaveNoDots()
+    {
+        Ui ui;
+        ui.click("settingsButton");
+        QTRY_VERIFY(ui.object("settingsMenu")->property("opened").toBool());
+        for (const char *name : {"settingsLabels", "settingsStorage", "settingsShortcuts"}) {
+            const QString text = ui.item(name)->property("text").toString();
+            QVERIFY2(!text.isEmpty() && !text.contains("…") && !text.contains("..."), qPrintable(text));
+        }
+        QCOMPARE(ui.item("settingsLabels")->property("text").toString(), QString("Labels"));
+        QCOMPARE(ui.item("settingsStorage")->property("text").toString(), QString("Storage folder"));
+        QCOMPARE(ui.item("settingsShortcuts")->property("text").toString(), QString("Keyboard shortcuts"));
+        ui.click("settingsLabels");
+        QTRY_VERIFY(ui.isOpen("labelsDialog"));
+        ui.click("labelsClose");
+        QTRY_VERIFY(ui.isClosed("labelsDialog"));
+        ui.click("tab-active");
+        ui.add("A");
+        ui.clickTask(ui.store()->tasks().at(0).id);
+        ui.key(Qt::Key_P);
+        QTRY_VERIFY(ui.object("postponeMenu")->property("opened").toBool());
+        QCOMPARE(ui.item("postponeCustom")->property("text").toString(), QString("Custom"));
+    }
+
     void ctrlDDuplicatesHighlightedOrTickedTasks()
     {
         Ui ui;
@@ -1155,6 +1386,26 @@ private Q_SLOTS:
         QTRY_VERIFY(ui.isClosed("shortcutsDialog"));
     }
 
+    void shortcutsDialogFitsASmallWindowAndScrolls()
+    {
+        Ui ui;
+        ui.window->resize(430, 420);
+        QTest::qWait(100);
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        QTRY_VERIFY(ui.item("shortcutField-restore"));
+        auto *dialog = ui.object("shortcutsDialog");
+        QVERIFY(dialog->property("height").toDouble() <= ui.window->height());
+        QVERIFY(dialog->property("height").toDouble() > 150); // not collapsed
+        QVERIFY(ui.item("shortcutField-complete")->mapToScene(QPointF(0, 0)).y() >= 0);
+        // More rows than room: the content is a scrolling area taller than the dialog.
+        auto *content = qvariant_cast<QQuickItem *>(dialog->property("contentItem"));
+        QVERIFY(content);
+        QVERIFY(content->property("contentHeight").toDouble() > content->height() + 20);
+        content->setProperty("contentY", content->property("contentHeight").toDouble() - content->height());
+        QTRY_VERIFY(ui.item("shortcutKeys-13")->mapToScene(QPointF(0, 0)).y() < ui.window->height());
+    }
+
     void settingsMenuHasLabelsStorageAndShortcuts()
     {
         QTemporaryDir other;
@@ -1166,7 +1417,7 @@ private Q_SLOTS:
             keys.append(ui.item(QString("shortcutKeys-%1").arg(i))->property("text").toString());
         }
         for (const char *key : {"Shift+Enter", "Enter", "Esc", "Esc Esc", "Up / Down", "Shift+Up / Shift+Down", "Space", "Ctrl+Up / Ctrl+Down",
-                 "Ctrl+PgDown / Ctrl+PgUp", "Ctrl+A", "Ctrl+D", "Delete", "Shift+Delete", "Ctrl+Q"}) {
+                 "Ctrl+PgDown / Ctrl+PgUp", "Ctrl+A", "Ctrl+D", "Shift+Delete", "Ctrl+Q"}) {
             QVERIFY2(keys.contains(key), key);
         }
         QMetaObject::invokeMethod(ui.object("shortcutsDialog"), "close");

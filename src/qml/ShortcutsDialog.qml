@@ -1,11 +1,15 @@
 import QtQuick 2.15
 import QtQuick.Controls 2.15 as QQC2
-import QtQuick.Layouts 1.15
 import org.kde.kirigami 2.20 as Kirigami
 
-// Lists the keyboard shortcuts.
+// The keyboard shortcuts: four of them can be changed (click one and press
+// the keys you want), the others are listed.
 QQC2.Dialog {
     id: dialog
+
+    // The action whose last change was refused, and why.
+    property string errorAction: ""
+    property string errorText: ""
 
     // "Selected" = the ticked tasks, or the highlighted one when none is ticked.
     readonly property var shortcuts: [
@@ -21,32 +25,146 @@ QQC2.Dialog {
         {keys: "Ctrl+PgDown / Ctrl+PgUp", action: i18n("Next / previous tab")},
         {keys: "Ctrl+A", action: i18n("Tick all tasks of the tab")},
         {keys: "Ctrl+D", action: i18n("Duplicate the selected tasks")},
-        {keys: "Delete", action: i18n("Cancel the selected tasks")},
         {keys: "Shift+Delete", action: i18n("Delete the selected tasks (several ask first)")},
         {keys: "Ctrl+Q", action: i18n("Quit")}
     ]
 
+    function change(action, keys) {
+        errorAction = action
+        errorText = keys === "" ? app.setShortcut(action, "") : app.setShortcut(action, keys)
+        if (errorText === "") {
+            errorAction = ""
+        }
+    }
+
+    function reset(action) {
+        errorAction = action
+        errorText = app.resetShortcut(action)
+        if (errorText === "") {
+            errorAction = ""
+        }
+    }
+
     anchors.centerIn: QQC2.Overlay.overlay
-    width: Math.min(parent.width - Kirigami.Units.gridUnit * 2, Kirigami.Units.gridUnit * 30)
+    width: Math.min(parent.width - Kirigami.Units.gridUnit * 2, Kirigami.Units.gridUnit * 32)
+    // As tall as the rows need, but never taller than the window; the rows
+    // scroll when it is smaller. The height comes from the rows and the
+    // rows' width from the dialog's width, so nothing depends on itself.
+    height: Math.min(parent.height - Kirigami.Units.gridUnit * 2,
+                     rows.height + topPadding + bottomPadding + implicitHeaderHeight + implicitFooterHeight)
     modal: true
     focus: true
     title: i18n("Keyboard shortcuts")
     standardButtons: QQC2.Dialog.Close
+    onOpened: {
+        errorAction = ""
+        errorText = ""
+    }
 
-    // Plain items with explicit widths instead of a layout: a layout of
+    // Plain items with explicit widths instead of layouts: a layout of
     // wrapping labels asks for its height while it hands out the widths,
     // which is a binding loop whenever the dialog's width changes (the
     // window is resized).
-    contentItem: Item {
-        id: content
+    contentItem: Flickable {
+        id: scroll
 
+        // Room for the scroll bar, so that it never changes the width of the rows.
+        readonly property int rowWidth: width - Kirigami.Units.gridUnit
         readonly property int keyWidth: Kirigami.Units.gridUnit * 11
-        implicitHeight: rows.height
+
+        contentWidth: width
+        contentHeight: rows.height
+        boundsBehavior: Flickable.StopAtBounds
+        clip: true
+        QQC2.ScrollBar.vertical: QQC2.ScrollBar {
+            policy: QQC2.ScrollBar.AsNeeded
+        }
 
         Column {
             id: rows
-            width: content.width
+            width: scroll.rowWidth
             spacing: Kirigami.Units.smallSpacing
+
+            QQC2.Label {
+                width: rows.width
+                text: i18n("Click a shortcut and press the keys you want. Esc gives up.")
+                wrapMode: Text.Wrap
+                opacity: 0.8
+            }
+
+            Repeater {
+                model: app.configurableShortcuts
+
+                Column {
+                    width: rows.width
+                    spacing: 2
+
+                    Item {
+                        width: parent.width
+                        height: field.implicitHeight
+
+                        QQC2.Label {
+                            objectName: "shortcutName-" + modelData.action
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: scroll.keyWidth
+                            text: modelData.name
+                            elide: Text.ElideRight
+                        }
+                        ShortcutField {
+                            id: field
+                            objectName: "shortcutField-" + modelData.action
+                            x: scroll.keyWidth + Kirigami.Units.largeSpacing
+                            width: parent.width - x - clear.width - restore.width - Kirigami.Units.smallSpacing * 2
+                            keys: modelData.keys
+                            onCaptured: dialog.change(modelData.action, keys)
+                        }
+                        IconButton {
+                            id: clear
+                            objectName: "shortcutClear-" + modelData.action
+                            anchors.right: restore.left
+                            anchors.rightMargin: Kirigami.Units.smallSpacing
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: i18n("Remove the shortcut")
+                            icon.name: "edit-clear"
+                            enabled: modelData.keys !== ""
+                            onClicked: dialog.change(modelData.action, "")
+                        }
+                        IconButton {
+                            id: restore
+                            objectName: "shortcutReset-" + modelData.action
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: i18n("Back to the default (%1)", modelData.defaultKeys)
+                            icon.name: "edit-undo"
+                            enabled: !modelData.isDefault
+                            onClicked: dialog.reset(modelData.action)
+                        }
+                    }
+                    // The label sits in an item that takes its height: a label
+                    // whose own height follows its implicit height loops.
+                    Item {
+                        width: parent.width
+                        height: message.visible ? message.implicitHeight : 0
+
+                        QQC2.Label {
+                            id: message
+                            objectName: "shortcutError-" + modelData.action
+                            x: scroll.keyWidth + Kirigami.Units.largeSpacing
+                            width: parent.width - x
+                            visible: dialog.errorAction === modelData.action && dialog.errorText !== ""
+                            text: dialog.errorText
+                            color: Kirigami.Theme.negativeTextColor
+                            wrapMode: Text.Wrap
+                            // The style binds this to the line count, which loops with the height.
+                            verticalAlignment: Text.AlignTop
+                        }
+                    }
+                }
+            }
+
+            Kirigami.Separator {
+                width: rows.width
+            }
 
             Repeater {
                 model: dialog.shortcuts
@@ -58,7 +176,7 @@ QQC2.Dialog {
                     QQC2.Label {
                         id: keys
                         objectName: "shortcutKeys-" + index
-                        width: content.keyWidth
+                        width: scroll.keyWidth
                         text: modelData.keys
                         font.bold: true
                         wrapMode: Text.Wrap
@@ -66,7 +184,7 @@ QQC2.Dialog {
                     QQC2.Label {
                         id: action
                         objectName: "shortcutAction-" + index
-                        x: content.keyWidth + Kirigami.Units.largeSpacing
+                        x: scroll.keyWidth + Kirigami.Units.largeSpacing
                         width: parent.width - x
                         text: modelData.action
                         wrapMode: Text.Wrap

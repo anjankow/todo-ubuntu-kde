@@ -69,11 +69,30 @@ Kirigami.ApplicationWindow {
         newTask.forceActiveFocus()
     }
 
+    // The shortcuts the user can change: complete, cancel, postpone, restore.
+    function runShortcut(action) {
+        if (action === "complete") {
+            app.completeSelected()
+        } else if (action === "cancel") {
+            app.cancelSelected()
+        } else if (action === "restore") {
+            app.restoreSelected()
+        } else if (action === "postpone" && app.canPostpone) {
+            // Asks how long, like the button does.
+            postponeMenu.popup(postponeButton, 0, postponeButton.height)
+        }
+    }
+
     // Keys that act on the task list. Returns true when the key was used.
     function taskKey(event) {
         var ctrl = (event.modifiers & Qt.ControlModifier) !== 0
         var shift = (event.modifiers & Qt.ShiftModifier) !== 0
         var list = app.currentModel
+        var chosen = app.actionForKey(event.key, event.modifiers)
+        if (chosen !== "") {
+            runShortcut(chosen)
+            return true
+        }
         switch (event.key) {
         case Qt.Key_Escape:
             var now = Date.now()
@@ -122,10 +141,8 @@ Kirigami.ApplicationWindow {
         case Qt.Key_Delete:
             if (shift) {
                 app.deleteSelected()
-            } else {
-                app.cancelSelected()
             }
-            return true
+            return shift
         case Qt.Key_D:
             if (ctrl) {
                 app.duplicateSelected()
@@ -176,19 +193,19 @@ Kirigami.ApplicationWindow {
 
                             QQC2.MenuItem {
                                 objectName: "settingsLabels"
-                                text: i18n("Labels…")
+                                text: i18n("Labels")
                                 icon.name: "tag"
                                 onTriggered: labelsDialog.open()
                             }
                             QQC2.MenuItem {
                                 objectName: "settingsStorage"
-                                text: i18n("Storage folder…")
+                                text: i18n("Storage folder")
                                 icon.name: "folder"
                                 onTriggered: folderDialog.open()
                             }
                             QQC2.MenuItem {
                                 objectName: "settingsShortcuts"
-                                text: i18n("Keyboard shortcuts…")
+                                text: i18n("Keyboard shortcuts")
                                 icon.name: "input-keyboard"
                                 onTriggered: shortcutsDialog.open()
                             }
@@ -345,6 +362,7 @@ Kirigami.ApplicationWindow {
                         PostponeMenu {
                             id: postponeMenu
                             objectName: "postponeMenu"
+                            onClosed: root.focusList()
                             onPresetChosen: app.postponeSelected(preset)
                             onCustomChosen: postponeDialog.ask(function (until) {
                                 app.postponeSelectedUntil(until)

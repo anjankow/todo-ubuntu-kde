@@ -5,6 +5,7 @@
 #include "tasklistmodel.h"
 
 #include <QDateTime>
+#include <QKeySequence>
 #include <QObject>
 #include <QTimer>
 #include <QSet>
@@ -35,6 +36,9 @@ class AppController : public QObject
     Q_PROPERTY(bool keepRunningInTray READ keepRunningInTray WRITE setKeepRunningInTray NOTIFY keepRunningInTrayChanged)
     Q_PROPERTY(QString storageDir READ storageDir NOTIFY storageDirChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorChanged) // empty = none
+    // The four shortcuts the user can change: action, name, keys, default
+    // keys and whether the keys are the default.
+    Q_PROPERTY(QVariantList configurableShortcuts READ configurableShortcuts NOTIFY shortcutsChanged)
     Q_PROPERTY(bool canComplete READ canComplete NOTIFY actionsChanged)
     Q_PROPERTY(bool canCancel READ canCancel NOTIFY actionsChanged)
     Q_PROPERTY(bool canPostpone READ canPostpone NOTIFY actionsChanged)
@@ -128,6 +132,22 @@ public:
     Q_INVOKABLE void confirmDelete();
     Q_INVOKABLE bool duplicateSelected();
 
+    // --- shortcuts the user can change: "complete", "cancel", "postpone", "restore"
+    QVariantList configurableShortcuts() const;
+    QString shortcutKeys(const QString &action) const;
+    // The text of a pressed key in portable form ("K", "Del", "Ctrl+K"); empty
+    // for a bare modifier key or a key that cannot be a shortcut.
+    Q_INVOKABLE QString keyText(int key, int modifiers) const;
+    // The action a pressed key stands for; empty for none.
+    Q_INVOKABLE QString actionForKey(int key, int modifiers) const;
+    // Sets the keys of an action; empty keys remove the shortcut. Returns an
+    // empty text on success, otherwise why the keys were refused (they are
+    // used by something else) and nothing changes.
+    Q_INVOKABLE QString setShortcut(const QString &action, const QString &keys);
+    // Back to the default of this one action (refused like setShortcut when
+    // another action has taken the default keys in the meantime).
+    Q_INVOKABLE QString resetShortcut(const QString &action);
+
     // --- labels
     Q_INVOKABLE bool addLabel(const QString &name, int colorIndex);
     Q_INVOKABLE bool updateLabel(const QString &id, const QString &name, int colorIndex);
@@ -139,6 +159,7 @@ public:
 Q_SIGNALS:
     void currentTabChanged();
     void labelsChanged();
+    void shortcutsChanged();
     void topTasksChanged();
     void keepRunningInTrayChanged();
     void storageDirChanged();
@@ -152,6 +173,7 @@ private:
     void onStoreChanged();
     void applyFilter();
     void scheduleRelease();
+    QString conflictOf(const QString &action, const QKeySequence &keys) const;
     bool hasSelection() const;
     void setError(const QString &message);
 

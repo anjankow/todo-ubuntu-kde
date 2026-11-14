@@ -91,6 +91,23 @@ private Q_SLOTS:
         QVERIFY(description.isEmpty());
     }
 
+    void shortcutsAreKeptWithTheTasks()
+    {
+        TodoStore store;
+        QSignalSpy spy(&store, &TodoStore::changed);
+        QVERIFY(store.shortcuts().isEmpty());
+        const QMap<QString, QString> keys = {{"complete", "K"}, {"cancel", ""}};
+        store.setShortcuts(keys);
+        QCOMPARE(store.shortcuts(), keys);
+        QCOMPARE(spy.count(), 1);
+        store.setShortcuts(keys); // nothing new: no change, no save
+        QCOMPARE(spy.count(), 1);
+        store.setContent({}, {}, {{"restore", "R"}}); // loading a file replaces them
+        QCOMPARE(store.shortcuts(), (QMap<QString, QString> {{"restore", "R"}}));
+        store.setContent({}, {});
+        QVERIFY(store.shortcuts().isEmpty());
+    }
+
     void updateTask()
     {
         TodoStore store;

@@ -28,7 +28,7 @@ QQC2.Menu {
     QQC2.MenuSeparator {}
     QQC2.MenuItem {
         objectName: "postponeCustom"
-        text: i18n("Custom…")
+        text: i18n("Custom")
         onTriggered: customChosen()
     }
 }
