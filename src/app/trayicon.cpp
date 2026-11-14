@@ -5,7 +5,9 @@
 #include <QApplication>
 #include <QCursor>
 #include <QIcon>
+#include <QKeyEvent>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QQuickWindow>
 #include <QScreen>
 #include <QSystemTrayIcon>
@@ -19,6 +21,57 @@ QPoint trayPopupPosition(const QRect &anchor, const QSize &popup, const QRect &s
     x = qBound(screen.left(), x, qMax(screen.left(), screen.right() + 1 - popup.width()));
     y = qBound(screen.top(), y, qMax(screen.top(), screen.bottom() + 1 - popup.height()));
     return {x, y};
+}
+
+PopupDismisser::PopupDismisser(QWindow *popup)
+    : QObject(popup)
+    , m_popup(popup)
+{
+    popup->installEventFilter(this);
+}
+
+bool PopupDismisser::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched != m_popup) {
+        return false;
+    }
+    switch (event->type()) {
+    case QEvent::Show:
+        // Comes before the window is mapped. A window declared inside another
+        // one in QML is its transient child; detaching it only here (not at
+        // load, when Qt still waits for the parent to become visible) keeps
+        // Qt's own bookkeeping of that parent intact.
+        if (m_popup->transientParent()) {
+            m_popup->setTransientParent(nullptr);
+        }
+        break;
+    case QEvent::Expose:
+        if (m_popup->isExposed() && m_popup->type() == Qt::Popup) {
+            m_popup->setKeyboardGrabEnabled(true);
+            m_popup->setMouseGrabEnabled(true);
+        }
+        break;
+    case QEvent::Hide:
+        m_popup->setKeyboardGrabEnabled(false);
+        m_popup->setMouseGrabEnabled(false);
+        break;
+    case QEvent::MouseButtonPress:
+        // While grabbed, presses anywhere on the screen arrive here.
+        if (!QRect(QPoint(0, 0), m_popup->size()).contains(static_cast<QMouseEvent *>(event)->pos())) {
+            m_popup->hide();
+            return true;
+        }
+        break;
+    case QEvent::KeyPress:
+        if (static_cast<QKeyEvent *>(event)->key() == Qt::Key_Escape) {
+            m_popup->hide();
+            return true;
+        }
+        break;
+    default:
+        break;
+    }
+    return false;
 }
 
 TrayIcon::TrayIcon(QQuickWindow *mainWindow, QQuickWindow *popup, QObject *parent)
@@ -38,6 +91,7 @@ TrayIcon::TrayIcon(QQuickWindow *mainWindow, QQuickWindow *popup, QObject *paren
         }
     });
     m_icon->show();
+    new PopupDismisser(popup);
 }
 
 TrayIcon::~TrayIcon()
@@ -77,5 +131,10 @@ void TrayIcon::togglePopup()
     m_popup->setPosition(trayPopupPosition(anchor, m_popup->size(), screen->availableGeometry()));
     m_popup->show();
     m_popup->raise();
-    m_popup->requestActivate();
+    // A menu-like popup works without the focus; taking it would change
+    // which window is active, and closing the popup would hand the focus
+    // to the main window.
+    if (m_popup->type() != Qt::Popup) {
+        m_popup->requestActivate();
+    }
 }

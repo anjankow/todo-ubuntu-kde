@@ -13,7 +13,16 @@ Window {
 
     width: Kirigami.Units.gridUnit * 18
     height: content.implicitHeight + Kirigami.Units.largeSpacing * 2
-    flags: Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
+    // Opening and closing the popup must leave the main window alone: only
+    // "Open Todo" brings it to the front. Window managers raise and focus a
+    // window together with the windows it is transient for, and on X11 Qt
+    // makes every tool window transient for the application's windows. So
+    // on X11 the popup is a menu-like window the window manager does not
+    // manage (it takes keyboard and mouse while open); elsewhere it is a
+    // tool window without a transient parent. Both: PopupDismisser.
+    readonly property bool menuLike: Qt.platform.pluginName === "xcb"
+
+    flags: (menuLike ? Qt.Popup : Qt.Tool) | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint
     color: Kirigami.Theme.backgroundColor
     title: i18n("Todo")
     // Like a menu, it goes away when something else is clicked.

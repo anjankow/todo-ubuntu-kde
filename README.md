@@ -37,6 +37,8 @@ Todos are kept in a JSON text file, `todos.json`, in a folder of your choice
 
 While the app runs it has an icon in the system tray. Click it for a popup with the first 5 tasks
 of the Tasks list (each can be completed with its checkmark) and an *Open Todo* button.
+The popup leaves the app's window as it is (it is not raised and does not get the focus) until you
+click *Open Todo*; a click outside the popup or `Esc` closes it.
 Closing the window keeps the app running in the tray; quit with `Ctrl+Q` or *Quit* in the
 icon's context menu. Only one instance runs: starting the app again brings its window to the front.
 

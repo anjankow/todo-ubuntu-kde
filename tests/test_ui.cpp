@@ -1,6 +1,7 @@
 #include "testenv.h"
 
 #include "app/application.h"
+#include "app/trayicon.h"
 
 #include <KLocalizedString>
 
@@ -1348,6 +1349,72 @@ private Q_SLOTS:
         QTest::mouseClick(popup, Qt::LeftButton, Qt::NoModifier, Ui::center(open));
         QTRY_VERIFY(ui.window->isVisible());
         QTRY_VERIFY(!popup->isVisible());
+    }
+
+    void trayPopupIsNotTiedToTheMainWindow()
+    {
+        Ui ui;
+        auto *popup = ui.window->findChild<QQuickWindow *>("trayPopup");
+        QVERIFY(popup);
+        new PopupDismisser(popup); // what the tray icon sets up
+        // Declared inside the main window, Qt makes it a transient child of it,
+        // and a window manager would then raise and focus the main window with
+        // it. It is detached when it is shown.
+        QCOMPARE(popup->transientParent(), ui.window);
+        popup->show();
+        QVERIFY(QTest::qWaitForWindowExposed(popup));
+        QCOMPARE(popup->transientParent(), nullptr);
+        // The test platform is not X11: a tool window. (On X11 it is a menu-like
+        // Qt::Popup the window manager does not manage; checked by hand there.)
+        QCOMPARE(popup->property("menuLike").toBool(), QGuiApplication::platformName() == "xcb");
+        QVERIFY(popup->flags() & Qt::Tool);
+        QVERIFY(popup->flags() & Qt::FramelessWindowHint);
+        // Showing it leaves the main window as it was.
+        QVERIFY(ui.window->isVisible());
+        QCOMPARE(ui.window->visibility(), QWindow::Windowed);
+        popup->hide();
+    }
+
+    void trayPopupClosesLikeAMenu()
+    {
+        Ui ui;
+        const QString a = ui.add("A");
+        auto *popup = ui.window->findChild<QQuickWindow *>("trayPopup");
+        new PopupDismisser(popup);
+        auto pressAt = [popup](const QPoint &pos) {
+            QMouseEvent press(QEvent::MouseButtonPress, pos, popup->mapToGlobal(pos), Qt::LeftButton, Qt::LeftButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(popup, &press);
+            QMouseEvent release(QEvent::MouseButtonRelease, pos, popup->mapToGlobal(pos), Qt::LeftButton, Qt::NoButton, Qt::NoModifier);
+            QCoreApplication::sendEvent(popup, &release);
+        };
+
+        // A press outside closes it (with a grab, presses anywhere arrive here).
+        popup->show();
+        QVERIFY(QTest::qWaitForWindowExposed(popup));
+        pressAt(QPoint(-20, 10));
+        QTRY_VERIFY(!popup->isVisible());
+        popup->show();
+        QVERIFY(QTest::qWaitForWindowExposed(popup));
+        pressAt(QPoint(popup->width() + 5, popup->height() / 2));
+        QTRY_VERIFY(!popup->isVisible());
+
+        // Esc closes it.
+        popup->show();
+        QVERIFY(QTest::qWaitForWindowExposed(popup));
+        QKeyEvent esc(QEvent::KeyPress, Qt::Key_Escape, Qt::NoModifier);
+        QCoreApplication::sendEvent(popup, &esc);
+        QTRY_VERIFY(!popup->isVisible());
+
+        // A press inside does what it is on and keeps it open.
+        popup->show();
+        QVERIFY(QTest::qWaitForWindowExposed(popup));
+        QQuickItem *complete = findItem(popup->contentItem(), "trayComplete-" + a);
+        QVERIFY(complete);
+        QTest::qWait(30);
+        QTest::mouseClick(popup, Qt::LeftButton, Qt::NoModifier, Ui::center(complete));
+        QCOMPARE(ui.store()->task(a)->state, TaskState::Completed);
+        QVERIFY(popup->isVisible());
+        popup->hide();
     }
 
     void closingTheWindowKeepsTheAppInTheTray()
