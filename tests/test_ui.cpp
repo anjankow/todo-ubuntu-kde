@@ -1132,6 +1132,29 @@ private Q_SLOTS:
         QCOMPARE(ui.buttonIcon("cardCancelTask", "source").toUrl().toString(), QString("qrc:/qml/icons/cancel.svg"));
     }
 
+    void shortcutsDialogSurvivesResizingTheWindow()
+    {
+        Ui ui;
+        // The dialog follows the width of the window. Resized before it was
+        // ever opened (this is what looped), then while it is open.
+        for (const QSize &size : {QSize(640, 760), QSize(420, 700), QSize(700, 500)}) {
+            ui.window->resize(size);
+            QTest::qWait(80);
+        }
+        ui.settings("settingsShortcuts");
+        QTRY_VERIFY(ui.isOpen("shortcutsDialog"));
+        for (const QSize &size : {QSize(900, 800), QSize(450, 600), QSize(510, 612)}) {
+            ui.window->resize(size);
+            QTest::qWait(80);
+        }
+        QQuickItem *keys = ui.item("shortcutKeys-0");
+        QQuickItem *action = ui.item("shortcutAction-0");
+        QVERIFY(keys && action);
+        QVERIFY(action->x() >= keys->width()); // two columns, the text right of the keys
+        QMetaObject::invokeMethod(ui.object("shortcutsDialog"), "close");
+        QTRY_VERIFY(ui.isClosed("shortcutsDialog"));
+    }
+
     void settingsMenuHasLabelsStorageAndShortcuts()
     {
         QTemporaryDir other;
