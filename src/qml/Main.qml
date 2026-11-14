@@ -482,19 +482,46 @@ Kirigami.ApplicationWindow {
             text: i18np("Permanently delete %1 task?", "Permanently delete %1 tasks?", confirmDialog.count)
             wrapMode: Text.Wrap
         }
+        // Permanent: Cancel is the choice that has the focus, so that Enter
+        // alone never deletes. The arrows move between the two buttons and
+        // Enter presses the one with the focus.
         footer: QQC2.DialogButtonBox {
             QQC2.Button {
+                id: confirmDeleteButton
                 objectName: "confirmDeleteButton"
+                highlighted: activeFocus // the selected button stands out
                 text: i18n("Delete")
                 icon.name: "edit-delete"
                 QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.AcceptRole
+                Keys.onPressed: confirmDialog.buttonKey(event, rejectDeleteButton, confirmDeleteButton)
             }
             QQC2.Button {
+                id: rejectDeleteButton
                 objectName: "rejectDeleteButton"
+                highlighted: activeFocus // the selected button stands out
                 text: i18n("Cancel")
                 QQC2.DialogButtonBox.buttonRole: QQC2.DialogButtonBox.RejectRole
+                Keys.onPressed: confirmDialog.buttonKey(event, confirmDeleteButton, rejectDeleteButton)
             }
         }
+        function buttonKey(event, other, current) {
+            switch (event.key) {
+            case Qt.Key_Left:
+            case Qt.Key_Right:
+            case Qt.Key_Up:
+            case Qt.Key_Down:
+                other.forceActiveFocus(Qt.TabFocusReason) // the focus ring shows
+                event.accepted = true
+                break
+            case Qt.Key_Return:
+            case Qt.Key_Enter:
+                current.clicked() // the button box does the rest: accept or reject
+                event.accepted = true
+                break
+            }
+        }
+        onOpened: rejectDeleteButton.forceActiveFocus(Qt.TabFocusReason)
+        onClosed: root.focusList()
         onAccepted: app.confirmDelete()
     }
 
