@@ -202,7 +202,8 @@ QVariantList AppController::topTasks() const
     QVariantList result;
     const QVector<Task> tasks = m_store->tasksIn(TaskState::Active); // not narrowed by the label filter
     for (int i = 0; i < tasks.size() && i < topTaskCount; ++i) {
-        result.append(QVariantMap {{QStringLiteral("id"), tasks.at(i).id}, {QStringLiteral("title"), tasks.at(i).title}});
+        result.append(QVariantMap {
+            {QStringLiteral("id"), tasks.at(i).id}, {QStringLiteral("title"), tasks.at(i).title}, {QStringLiteral("description"), tasks.at(i).description}});
     }
     return result;
 }
