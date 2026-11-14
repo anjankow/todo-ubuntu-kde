@@ -59,6 +59,13 @@ bool isConfigurable(const QString &action)
     return false;
 }
 
+// A key with modifiers. Qt's modifier and key enums are different types; they
+// are meant to be combined as plain ints.
+QKeySequence combo(int modifiers, int key)
+{
+    return QKeySequence(modifiers | key);
+}
+
 // Keys with a fixed meaning: they cannot be given to an action.
 struct FixedShortcut {
     QKeySequence keys;
@@ -69,22 +76,22 @@ const QVector<FixedShortcut> &fixedShortcuts()
     static const QVector<FixedShortcut> list = {
         {QKeySequence(Qt::Key_Up), i18n("move the highlight")},
         {QKeySequence(Qt::Key_Down), i18n("move the highlight")},
-        {QKeySequence(Qt::SHIFT | Qt::Key_Up), i18n("tick the tasks the highlight passes")},
-        {QKeySequence(Qt::SHIFT | Qt::Key_Down), i18n("tick the tasks the highlight passes")},
-        {QKeySequence(Qt::CTRL | Qt::Key_Up), i18n("move the highlighted task")},
-        {QKeySequence(Qt::CTRL | Qt::Key_Down), i18n("move the highlighted task")},
+        {combo(Qt::SHIFT, Qt::Key_Up), i18n("tick the tasks the highlight passes")},
+        {combo(Qt::SHIFT, Qt::Key_Down), i18n("tick the tasks the highlight passes")},
+        {combo(Qt::CTRL, Qt::Key_Up), i18n("move the highlighted task")},
+        {combo(Qt::CTRL, Qt::Key_Down), i18n("move the highlighted task")},
         {QKeySequence(Qt::Key_Return), i18n("open the task card")},
         {QKeySequence(Qt::Key_Enter), i18n("open the task card")},
-        {QKeySequence(Qt::SHIFT | Qt::Key_Return), i18n("focus the new-task input")},
-        {QKeySequence(Qt::SHIFT | Qt::Key_Enter), i18n("focus the new-task input")},
+        {combo(Qt::SHIFT, Qt::Key_Return), i18n("focus the new-task input")},
+        {combo(Qt::SHIFT, Qt::Key_Enter), i18n("focus the new-task input")},
         {QKeySequence(Qt::Key_Escape), i18n("leave the input and remove the highlight")},
         {QKeySequence(Qt::Key_Space), i18n("tick the highlighted task")},
-        {QKeySequence(Qt::CTRL | Qt::Key_A), i18n("tick all tasks")},
-        {QKeySequence(Qt::CTRL | Qt::Key_D), i18n("duplicate the selected tasks")},
-        {QKeySequence(Qt::SHIFT | Qt::Key_Delete), i18n("delete the selected tasks")},
-        {QKeySequence(Qt::CTRL | Qt::Key_PageUp), i18n("previous tab")},
-        {QKeySequence(Qt::CTRL | Qt::Key_PageDown), i18n("next tab")},
-        {QKeySequence(Qt::CTRL | Qt::Key_Q), i18n("quit")},
+        {combo(Qt::CTRL, Qt::Key_A), i18n("tick all tasks")},
+        {combo(Qt::CTRL, Qt::Key_D), i18n("duplicate the selected tasks")},
+        {combo(Qt::SHIFT, Qt::Key_Delete), i18n("delete the selected tasks")},
+        {combo(Qt::CTRL, Qt::Key_PageUp), i18n("previous tab")},
+        {combo(Qt::CTRL, Qt::Key_PageDown), i18n("next tab")},
+        {combo(Qt::CTRL, Qt::Key_Q), i18n("quit")},
     };
     return list;
 }
@@ -256,7 +263,8 @@ QString AppController::keyText(int key, int modifiers) const
     default:
         break;
     }
-    const int mods = modifiers & (Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier);
+    const Qt::KeyboardModifiers wanted = Qt::ShiftModifier | Qt::ControlModifier | Qt::AltModifier | Qt::MetaModifier;
+    const int mods = static_cast<int>(static_cast<unsigned>(Qt::KeyboardModifiers(modifiers) & wanted));
     return QKeySequence(key | mods).toString(QKeySequence::PortableText);
 }
 
