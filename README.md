@@ -6,7 +6,12 @@ The majority of actions can be done straight from your keyboard. Check out the s
 
 Used daily by me, @anjankow, and now might also be used by you.
 
+
+> [!NOTE]
+> Code written entirely with AI.
+
 ![Demo](docs/demo.gif)
+
 
 ## Keyboard shortcuts
 
